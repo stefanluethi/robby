@@ -257,10 +257,12 @@ UniqueID=6F9651E9-7493-4E1F-986E-99133195F632
 Description=Default
 AllowFabrication=0
 ParameterCount=0
-VariationCount=3
+VariationCount=5
 Variation1=Designator=P400_M1|UniqueId=\1CDSYXUPH\UHKASVWM|Kind=1|AlternatePart= 
 Variation2=Designator=P400_M2|UniqueId=\2CDSYXUPH\UHKASVWM|Kind=1|AlternatePart= 
 Variation3=Designator=P200|UniqueId=\JUVXWGAN\DHPVNDKK|Kind=1|AlternatePart= 
+Variation4=Designator=C300|UniqueId=\NJCSRXEC\XULYXLQK|Kind=1|AlternatePart= 
+Variation5=Designator=C301|UniqueId=\NJCSRXEC\MZOBVVXY|Kind=1|AlternatePart= 
 ParamVariationCount=0
 
 [ProjectVariant2]
@@ -268,11 +270,13 @@ UniqueID=C20D092B-A624-4DB5-9FA4-AA682D49E828
 Description=Screw Terminal
 AllowFabrication=0
 ParameterCount=0
-VariationCount=4
+VariationCount=6
 Variation1=Designator=J400_M2|UniqueId=\2CDSYXUPH\BAYSHLDJ|Kind=1|AlternatePart= 
 Variation2=Designator=J400_M1|UniqueId=\1CDSYXUPH\BAYSHLDJ|Kind=1|AlternatePart= 
 Variation3=Designator=P200|UniqueId=\JUVXWGAN\DHPVNDKK|Kind=0|AlternatePart= 
 Variation4=Designator=J200|UniqueId=\JUVXWGAN\URYLEVAY|Kind=1|AlternatePart= 
+Variation5=Designator=C300|UniqueId=\NJCSRXEC\XULYXLQK|Kind=1|AlternatePart= 
+Variation6=Designator=C301|UniqueId=\NJCSRXEC\MZOBVVXY|Kind=1|AlternatePart= 
 ParamVariationCount=0
 
 [Parameter1]
