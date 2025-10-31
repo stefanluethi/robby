@@ -279,6 +279,10 @@ Variation5=Designator=C300|UniqueId=\NJCSRXEC\XULYXLQK|Kind=1|AlternatePart=
 Variation6=Designator=C301|UniqueId=\NJCSRXEC\MZOBVVXY|Kind=1|AlternatePart= 
 ParamVariationCount=0
 
+[GeneratedDocument1]
+DocumentPath=Project Outputs for MotorBase\Design Rule Check - motor_base.html
+DItemRevisionGUID=
+
 [Parameter1]
 Name=seAuthor
 Value=Stefan Lüthi

@@ -55,7 +55,7 @@ AnnotateStartValue=1
 AnnotationIndexControlEnabled=0
 AnnotateSuffix=
 AnnotateScope=All
-AnnotateOrder=-1
+AnnotateOrder=1
 DoLibraryUpdate=1
 DoDatabaseUpdate=1
 ClassGenCCAutoEnabled=1
@@ -68,11 +68,11 @@ DocumentUniqueId=MVSXXEWF
 [Document2]
 DocumentPath=MonitoringProtection.SchDoc
 AnnotationEnabled=1
-AnnotateStartValue=1
-AnnotationIndexControlEnabled=0
+AnnotateStartValue=200
+AnnotationIndexControlEnabled=1
 AnnotateSuffix=
 AnnotateScope=All
-AnnotateOrder=-1
+AnnotateOrder=2
 DoLibraryUpdate=1
 DoDatabaseUpdate=1
 ClassGenCCAutoEnabled=1
@@ -85,8 +85,8 @@ DocumentUniqueId=NNBIMWBI
 [Document3]
 DocumentPath=Charger.SchDoc
 AnnotationEnabled=1
-AnnotateStartValue=1
-AnnotationIndexControlEnabled=0
+AnnotateStartValue=300
+AnnotationIndexControlEnabled=1
 AnnotateSuffix=
 AnnotateScope=All
 AnnotateOrder=0
@@ -189,16 +189,16 @@ DocumentPath=Project Outputs for BatteryPack\Design Rule Check - BatteryPack.htm
 DItemRevisionGUID=
 
 [Parameter1]
-Name=seRevision
-Value=1.0
-
-[Parameter2]
 Name=seAuthor
 Value=Stefan Lüthi
 
-[Parameter3]
+[Parameter2]
 Name=seProject
 Value=robby
+
+[Parameter3]
+Name=seRevision
+Value=1.0
 
 [Configuration1]
 Name=Sources
@@ -1198,10 +1198,16 @@ NetClassManualEnabled=1
 NetClassSeparateForBusSections=0
 
 [LibraryUpdateOptions]
-SelectedOnly=0
+SelectedOnly=1
 UpdateVariants=1
 UpdateToLatestRevision=1
 PartTypes=0
+ComponentLibIdentifierKind0=Library Name Only
+ComponentLibraryIdentifier0=Altium Content Vault
+ComponentDesignItemID0=CMP-1426-00006-6
+ComponentSymbolReference0=LED_Green_2A-1K
+ComponentUpdate0=1
+ComponentIsDeviceSheet0=0
 FullReplace=1
 UpdateDesignatorLock=1
 UpdatePartIDLock=1
@@ -1215,6 +1221,75 @@ RemoveParameters=0
 AddModels=1
 RemoveModels=1
 UpdateCurrentModels=1
+ParameterName0=Case Code (Imperial)
+ParameterUpdate0=1
+ParameterName1=Case Code (Metric)
+ParameterUpdate1=1
+ParameterName2=Case/Package
+ParameterUpdate2=1
+ParameterName3=Color
+ParameterUpdate3=1
+ParameterName4=Comment
+ParameterUpdate4=1
+ParameterName5=Component Kind
+ParameterUpdate5=1
+ParameterName6=Description
+ParameterUpdate6=1
+ParameterName7=Dominant Wavelength
+ParameterUpdate7=1
+ParameterName8=Forward Current
+ParameterUpdate8=1
+ParameterName9=Forward Voltage
+ParameterUpdate9=1
+ParameterName10=Height
+ParameterUpdate10=1
+ParameterName11=Length
+ParameterUpdate11=1
+ParameterName12=Lens Style
+ParameterUpdate12=1
+ParameterName13=Library Reference
+ParameterUpdate13=1
+ParameterName14=Luminous Intensity
+ParameterUpdate14=1
+ParameterName15=Max Junction Temperature (Tj)
+ParameterUpdate15=1
+ParameterName16=Max Operating Temperature
+ParameterUpdate16=1
+ParameterName17=Max Reverse Voltage (DC)
+ParameterUpdate17=1
+ParameterName18=Min Operating Temperature
+ParameterUpdate18=1
+ParameterName19=Mount
+ParameterUpdate19=1
+ParameterName20=NexarPartId
+ParameterUpdate20=1
+ParameterName21=Number of Pins
+ParameterUpdate21=1
+ParameterName22=Packaging
+ParameterUpdate22=1
+ParameterName23=Peak Wavelength
+ParameterUpdate23=1
+ParameterName24=Power Dissipation
+ParameterUpdate24=1
+ParameterName25=REACH SVHC
+ParameterUpdate25=1
+ParameterName26=Reverse Voltage
+ParameterUpdate26=1
+ParameterName27=RoHS
+ParameterUpdate27=1
+ParameterName28=Test Current
+ParameterUpdate28=1
+ParameterName29=Viewing Angle
+ParameterUpdate29=1
+ParameterName30=Wavelength
+ParameterUpdate30=1
+ParameterName31=Width
+ParameterUpdate31=1
+ModelTypeGroup0=PCBLIB
+ModelTypeUpdate0=1
+ModelType0=PCBLIB
+ModelName0=WL-SMCW_0603_150060xx75000
+ModelUpdate0=1
 
 [DatabaseUpdateOptions]
 SelectedOnly=0
