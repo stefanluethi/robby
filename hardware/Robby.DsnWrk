@@ -1,0 +1,12 @@
+[ProjectGroup]
+Version=1.0
+[Project1]
+ProjectPath=motor_base\MotorBase.PrjPcb
+[Project2]
+ProjectPath=sensor_extension\SensorAddOn.PrjPcb
+[Project3]
+ProjectPath=distance_sensor\DistanceSensor.PrjPcb
+[Project4]
+ProjectPath=battery_pack\BatteryPack.PrjPcb
+[Project5]
+ProjectPath=lib\lib.PrjPcb

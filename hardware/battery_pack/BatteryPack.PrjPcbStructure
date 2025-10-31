@@ -1,0 +1,3 @@
+Record=TopLevelDocument|FileName=Top.SchDoc|SheetNumber=1
+Record=SheetSymbol|SourceDocument=Top.SchDoc|Designator=Battery Monitoring & Protection|SchDesignator=Battery Monitoring & Protection|FileName=MonitoringProtection.SchDoc|SheetNumber=2|SymbolType=Normal|RawFileName=MonitoringProtection.SchDoc|DesignItemId= |SourceLibraryName= |ObjectKind=Sheet Symbol|RevisionGUID= |ItemGUID= |VaultGUID= 
+Record=SheetSymbol|SourceDocument=Top.SchDoc|Designator=USB Charger|SchDesignator=USB Charger|FileName=Charger.SchDoc|SheetNumber=3|SymbolType=Normal|RawFileName=Charger.SchDoc|DesignItemId= |SourceLibraryName= |ObjectKind=Sheet Symbol|RevisionGUID= |ItemGUID= |VaultGUID= 
