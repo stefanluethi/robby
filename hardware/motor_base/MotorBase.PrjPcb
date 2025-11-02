@@ -43,10 +43,16 @@ CrossRefPorts=3
 CrossRefCrossSheets=1
 CrossRefSheetEntries=0
 CrossRefFollowFromMainSettings=1
+CurrentVariant=Default
 
 [Preferences]
 PrefsVaultGUID=
 PrefsRevisionGUID=
+
+[Release]
+ReleaseTarget=1
+ReleaseFolderPath=release
+ReleaseZipPath=[OutputPath][ProjectName].zip
 
 [Document1]
 DocumentPath=Top.SchDoc
@@ -185,7 +191,7 @@ GenerateClassCluster=0
 DocumentUniqueId=
 
 [Document9]
-DocumentPath=Connectivity.Harness
+DocumentPath=MotorBase.OutJob
 AnnotationEnabled=1
 AnnotateStartValue=1
 AnnotationIndexControlEnabled=0
@@ -202,7 +208,7 @@ GenerateClassCluster=0
 DocumentUniqueId=
 
 [Document10]
-DocumentPath=Misc.Harness
+DocumentPath=Connectivity.Harness
 AnnotationEnabled=1
 AnnotateStartValue=1
 AnnotationIndexControlEnabled=0
@@ -219,7 +225,7 @@ GenerateClassCluster=0
 DocumentUniqueId=
 
 [Document11]
-DocumentPath=DiscoCarrier.Harness
+DocumentPath=Misc.Harness
 AnnotationEnabled=1
 AnnotateStartValue=1
 AnnotationIndexControlEnabled=0
@@ -236,6 +242,23 @@ GenerateClassCluster=0
 DocumentUniqueId=
 
 [Document12]
+DocumentPath=DiscoCarrier.Harness
+AnnotationEnabled=1
+AnnotateStartValue=1
+AnnotationIndexControlEnabled=0
+AnnotateSuffix=
+AnnotateScope=All
+AnnotateOrder=-1
+DoLibraryUpdate=1
+DoDatabaseUpdate=1
+ClassGenCCAutoEnabled=1
+ClassGenCCAutoRoomEnabled=0
+ClassGenNCAutoScope=None
+DItemRevisionGUID=
+GenerateClassCluster=0
+DocumentUniqueId=
+
+[Document13]
 DocumentPath=Power.Harness
 AnnotationEnabled=1
 AnnotateStartValue=1
@@ -251,6 +274,23 @@ ClassGenNCAutoScope=None
 DItemRevisionGUID=
 GenerateClassCluster=0
 DocumentUniqueId=
+
+[Document14]
+DocumentPath=MotorBase.PCBDwf
+AnnotationEnabled=1
+AnnotateStartValue=1
+AnnotationIndexControlEnabled=0
+AnnotateSuffix=
+AnnotateScope=All
+AnnotateOrder=-1
+DoLibraryUpdate=1
+DoDatabaseUpdate=1
+ClassGenCCAutoEnabled=1
+ClassGenCCAutoRoomEnabled=0
+ClassGenNCAutoScope=None
+DItemRevisionGUID=
+GenerateClassCluster=0
+DocumentUniqueId=TOXJMIJG
 
 [ProjectVariant1]
 UniqueID=6F9651E9-7493-4E1F-986E-99133195F632
@@ -280,7 +320,79 @@ Variation6=Designator=C301|UniqueId=\NJCSRXEC\MZOBVVXY|Kind=1|AlternatePart=
 ParamVariationCount=0
 
 [GeneratedDocument1]
+DocumentPath=Release\Bill of Materials-MotorBase(Default).xlsx
+DItemRevisionGUID=
+
+[GeneratedDocument2]
+DocumentPath=Release\PCBA\Bill of Materials-MotorBase(Default).xlsx
+DItemRevisionGUID=
+
+[GeneratedDocument3]
 DocumentPath=Project Outputs for MotorBase\Design Rule Check - motor_base.html
+DItemRevisionGUID=
+
+[GeneratedDocument4]
+DocumentPath=Release\PCBA\MotorBase-NonPlated.TXT
+DItemRevisionGUID=
+
+[GeneratedDocument5]
+DocumentPath=Release\PCBA\MotorBase-Plated.TXT
+DItemRevisionGUID=
+
+[GeneratedDocument6]
+DocumentPath=Release\PCBA\MotorBase.DRR
+DItemRevisionGUID=
+
+[GeneratedDocument7]
+DocumentPath=Release\PCBA\MotorBase.EXTREP
+DItemRevisionGUID=
+
+[GeneratedDocument8]
+DocumentPath=Release\PCBA\MotorBase.GBL
+DItemRevisionGUID=
+
+[GeneratedDocument9]
+DocumentPath=Release\PCBA\MotorBase.GBO
+DItemRevisionGUID=
+
+[GeneratedDocument10]
+DocumentPath=Release\PCBA\MotorBase.GBP
+DItemRevisionGUID=
+
+[GeneratedDocument11]
+DocumentPath=Release\PCBA\MotorBase.GBS
+DItemRevisionGUID=
+
+[GeneratedDocument12]
+DocumentPath=Release\PCBA\MotorBase.GM
+DItemRevisionGUID=
+
+[GeneratedDocument13]
+DocumentPath=Release\PCBA\MotorBase.GTL
+DItemRevisionGUID=
+
+[GeneratedDocument14]
+DocumentPath=Release\PCBA\MotorBase.GTO
+DItemRevisionGUID=
+
+[GeneratedDocument15]
+DocumentPath=Release\PCBA\MotorBase.GTP
+DItemRevisionGUID=
+
+[GeneratedDocument16]
+DocumentPath=Release\PCBA\MotorBase.GTS
+DItemRevisionGUID=
+
+[GeneratedDocument17]
+DocumentPath=Release\PCBA\MotorBase.LDP
+DItemRevisionGUID=
+
+[GeneratedDocument18]
+DocumentPath=Release\PCBA\MotorBase.REP
+DItemRevisionGUID=
+
+[GeneratedDocument19]
+DocumentPath=Release\PCBA\Pick Place for MotorBase(Default).csv
 DItemRevisionGUID=
 
 [Parameter1]
@@ -304,6 +416,54 @@ Variant=[No Variations]
 OutputJobsCount=0
 ContentTypeGUID=CB6F2064-E317-11DF-B822-12313F0024A2
 ConfigurationType=Source
+
+[Configuration2]
+Name=Fabrication
+ParameterCount=0
+ConstraintFileCount=0
+ReleaseItemId=
+Variant=[No Variations]
+OutputJobsCount=1
+DocumentReferenceClass1=DocumentReference
+OutputJobFileName1=MotorBase.OutJob
+ContentTypeGUID=0C520D2A-E60C-11DF-B822-12313F0024A2
+ConfigurationType=Fabrication
+
+[Configuration3]
+Name=Assembly Default
+ParameterCount=0
+ConstraintFileCount=0
+ReleaseItemId=
+Variant=Default
+OutputJobsCount=1
+DocumentReferenceClass1=DocumentReference
+OutputJobFileName1=MotorBase.OutJob
+ContentTypeGUID=0D12F8DC-E60C-11DF-B822-12313F0024A2
+ConfigurationType=Assembly
+
+[Configuration4]
+Name=Assembly Screw Terminal
+ParameterCount=0
+ConstraintFileCount=0
+ReleaseItemId=
+Variant=Screw Terminal
+OutputJobsCount=1
+DocumentReferenceClass1=DocumentReference
+OutputJobFileName1=MotorBase.OutJob
+ContentTypeGUID=0D12F8DC-E60C-11DF-B822-12313F0024A2
+ConfigurationType=Assembly
+
+[Configuration5]
+Name=Assembly
+ParameterCount=0
+ConstraintFileCount=0
+ReleaseItemId=
+Variant=[No Variations]
+OutputJobsCount=1
+DocumentReferenceClass1=DocumentReference
+OutputJobFileName1=MotorBase.OutJob
+ContentTypeGUID=0D12F8DC-E60C-11DF-B822-12313F0024A2
+ConfigurationType=Assembly
 
 [OutputGroup1]
 Name=Netlist Outputs

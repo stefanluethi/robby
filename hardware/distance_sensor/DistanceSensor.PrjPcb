@@ -50,6 +50,23 @@ PrefsVaultGUID=
 PrefsRevisionGUID=
 
 [Document1]
+DocumentPath=DistanceSensor.OutJob
+AnnotationEnabled=1
+AnnotateStartValue=1
+AnnotationIndexControlEnabled=0
+AnnotateSuffix=
+AnnotateScope=All
+AnnotateOrder=-1
+DoLibraryUpdate=1
+DoDatabaseUpdate=1
+ClassGenCCAutoEnabled=1
+ClassGenCCAutoRoomEnabled=0
+ClassGenNCAutoScope=None
+DItemRevisionGUID=
+GenerateClassCluster=0
+DocumentUniqueId=
+
+[Document2]
 DocumentPath=DistanceSensor.SchDoc
 AnnotationEnabled=1
 AnnotateStartValue=1
@@ -66,7 +83,7 @@ DItemRevisionGUID=
 GenerateClassCluster=0
 DocumentUniqueId=IVKKJOXR
 
-[Document2]
+[Document3]
 DocumentPath=DistanceSensor.PcbDoc
 AnnotationEnabled=1
 AnnotateStartValue=1
@@ -83,6 +100,40 @@ DItemRevisionGUID=
 GenerateClassCluster=0
 DocumentUniqueId=GOVULOQF
 
+[Document4]
+DocumentPath=DistanceSensor.PCBDwf
+AnnotationEnabled=1
+AnnotateStartValue=1
+AnnotationIndexControlEnabled=0
+AnnotateSuffix=
+AnnotateScope=All
+AnnotateOrder=-1
+DoLibraryUpdate=1
+DoDatabaseUpdate=1
+ClassGenCCAutoEnabled=1
+ClassGenCCAutoRoomEnabled=0
+ClassGenNCAutoScope=None
+DItemRevisionGUID=
+GenerateClassCluster=0
+DocumentUniqueId=TOXJMIJG
+
+[Document5]
+DocumentPath=DistanceSensor.BomDoc
+AnnotationEnabled=1
+AnnotateStartValue=1
+AnnotationIndexControlEnabled=0
+AnnotateSuffix=
+AnnotateScope=All
+AnnotateOrder=-1
+DoLibraryUpdate=1
+DoDatabaseUpdate=1
+ClassGenCCAutoEnabled=1
+ClassGenCCAutoRoomEnabled=0
+ClassGenNCAutoScope=None
+DItemRevisionGUID=
+GenerateClassCluster=0
+DocumentUniqueId=
+
 [ProjectVariant1]
 UniqueID=8B87CED4-CF24-43D9-A274-7F4ACF83555B
 Description=Sensor1
@@ -96,16 +147,16 @@ Variation4=Designator=R10|UniqueId=\DHFISURH|Kind=1|AlternatePart=
 ParamVariationCount=0
 
 [Parameter1]
-Name=seRevision
-Value=1.0
-
-[Parameter2]
 Name=seAuthor
 Value=Stefan Lüthi
 
-[Parameter3]
+[Parameter2]
 Name=seProject
 Value=robby
+
+[Parameter3]
+Name=seRevision
+Value=1.0
 
 [Configuration1]
 Name=Sources

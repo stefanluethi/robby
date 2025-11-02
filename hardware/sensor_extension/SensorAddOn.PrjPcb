@@ -49,6 +49,23 @@ PrefsVaultGUID=
 PrefsRevisionGUID=
 
 [Document1]
+DocumentPath=SensorAddOn.OutJob
+AnnotationEnabled=1
+AnnotateStartValue=1
+AnnotationIndexControlEnabled=0
+AnnotateSuffix=
+AnnotateScope=All
+AnnotateOrder=-1
+DoLibraryUpdate=1
+DoDatabaseUpdate=1
+ClassGenCCAutoEnabled=1
+ClassGenCCAutoRoomEnabled=0
+ClassGenNCAutoScope=None
+DItemRevisionGUID=
+GenerateClassCluster=0
+DocumentUniqueId=
+
+[Document2]
 DocumentPath=SensorAddOn.SchDoc
 AnnotationEnabled=1
 AnnotateStartValue=1
@@ -65,7 +82,7 @@ DItemRevisionGUID=
 GenerateClassCluster=0
 DocumentUniqueId=IMYZANMJ
 
-[Document2]
+[Document3]
 DocumentPath=SensorAddOn.PcbDoc
 AnnotationEnabled=1
 AnnotateStartValue=1
@@ -82,7 +99,7 @@ DItemRevisionGUID=
 GenerateClassCluster=0
 DocumentUniqueId=KSHMWWUF
 
-[Document3]
+[Document4]
 DocumentPath=SensorAddOn.BomDoc
 AnnotationEnabled=1
 AnnotateStartValue=1
@@ -99,21 +116,38 @@ DItemRevisionGUID=
 GenerateClassCluster=0
 DocumentUniqueId=
 
+[Document5]
+DocumentPath=SensorAddOn.PCBDwf
+AnnotationEnabled=1
+AnnotateStartValue=1
+AnnotationIndexControlEnabled=0
+AnnotateSuffix=
+AnnotateScope=All
+AnnotateOrder=-1
+DoLibraryUpdate=1
+DoDatabaseUpdate=1
+ClassGenCCAutoEnabled=1
+ClassGenCCAutoRoomEnabled=0
+ClassGenNCAutoScope=None
+DItemRevisionGUID=
+GenerateClassCluster=0
+DocumentUniqueId=SHHPBECY
+
 [GeneratedDocument1]
 DocumentPath=Project Outputs for SensorAddOn\Design Rule Check - SensorAddOn.html
 DItemRevisionGUID=
 
 [Parameter1]
-Name=seRevision
-Value=1.0
-
-[Parameter2]
 Name=seAuthor
 Value=Stefan Lüthi
 
-[Parameter3]
+[Parameter2]
 Name=seProject
 Value=robby
+
+[Parameter3]
+Name=seRevision
+Value=1.0
 
 [Configuration1]
 Name=Sources
