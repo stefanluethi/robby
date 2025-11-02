@@ -151,7 +151,7 @@ GenerateClassCluster=0
 DocumentUniqueId=OQQABJSR
 
 [Document7]
-DocumentPath=motor_base.PcbDoc
+DocumentPath=MotorBase.PcbDoc
 AnnotationEnabled=1
 AnnotateStartValue=1
 AnnotationIndexControlEnabled=0
