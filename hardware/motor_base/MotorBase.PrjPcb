@@ -332,66 +332,70 @@ DocumentPath=Project Outputs for MotorBase\Design Rule Check - motor_base.html
 DItemRevisionGUID=
 
 [GeneratedDocument4]
-DocumentPath=Release\PCBA\MotorBase-NonPlated.TXT
+DocumentPath=Project Outputs for MotorBase\Design Rule Check - MotorBase.html
 DItemRevisionGUID=
 
 [GeneratedDocument5]
-DocumentPath=Release\PCBA\MotorBase-Plated.TXT
+DocumentPath=Release\PCBA\MotorBase-NonPlated.TXT
 DItemRevisionGUID=
 
 [GeneratedDocument6]
-DocumentPath=Release\PCBA\MotorBase.DRR
+DocumentPath=Release\PCBA\MotorBase-Plated.TXT
 DItemRevisionGUID=
 
 [GeneratedDocument7]
-DocumentPath=Release\PCBA\MotorBase.EXTREP
+DocumentPath=Release\PCBA\MotorBase.DRR
 DItemRevisionGUID=
 
 [GeneratedDocument8]
-DocumentPath=Release\PCBA\MotorBase.GBL
+DocumentPath=Release\PCBA\MotorBase.EXTREP
 DItemRevisionGUID=
 
 [GeneratedDocument9]
-DocumentPath=Release\PCBA\MotorBase.GBO
+DocumentPath=Release\PCBA\MotorBase.GBL
 DItemRevisionGUID=
 
 [GeneratedDocument10]
-DocumentPath=Release\PCBA\MotorBase.GBP
+DocumentPath=Release\PCBA\MotorBase.GBO
 DItemRevisionGUID=
 
 [GeneratedDocument11]
-DocumentPath=Release\PCBA\MotorBase.GBS
+DocumentPath=Release\PCBA\MotorBase.GBP
 DItemRevisionGUID=
 
 [GeneratedDocument12]
-DocumentPath=Release\PCBA\MotorBase.GM
+DocumentPath=Release\PCBA\MotorBase.GBS
 DItemRevisionGUID=
 
 [GeneratedDocument13]
-DocumentPath=Release\PCBA\MotorBase.GTL
+DocumentPath=Release\PCBA\MotorBase.GM
 DItemRevisionGUID=
 
 [GeneratedDocument14]
-DocumentPath=Release\PCBA\MotorBase.GTO
+DocumentPath=Release\PCBA\MotorBase.GTL
 DItemRevisionGUID=
 
 [GeneratedDocument15]
-DocumentPath=Release\PCBA\MotorBase.GTP
+DocumentPath=Release\PCBA\MotorBase.GTO
 DItemRevisionGUID=
 
 [GeneratedDocument16]
-DocumentPath=Release\PCBA\MotorBase.GTS
+DocumentPath=Release\PCBA\MotorBase.GTP
 DItemRevisionGUID=
 
 [GeneratedDocument17]
-DocumentPath=Release\PCBA\MotorBase.LDP
+DocumentPath=Release\PCBA\MotorBase.GTS
 DItemRevisionGUID=
 
 [GeneratedDocument18]
-DocumentPath=Release\PCBA\MotorBase.REP
+DocumentPath=Release\PCBA\MotorBase.LDP
 DItemRevisionGUID=
 
 [GeneratedDocument19]
+DocumentPath=Release\PCBA\MotorBase.REP
+DItemRevisionGUID=
+
+[GeneratedDocument20]
 DocumentPath=Release\PCBA\Pick Place for MotorBase(Default).csv
 DItemRevisionGUID=
 

@@ -146,6 +146,10 @@ Variation3=Designator=R11|UniqueId=\BXRBQQIR|Kind=1|AlternatePart=
 Variation4=Designator=R10|UniqueId=\DHFISURH|Kind=1|AlternatePart= 
 ParamVariationCount=0
 
+[GeneratedDocument1]
+DocumentPath=Project Outputs for DistanceSensor\Design Rule Check - DistanceSensor.html
+DItemRevisionGUID=
+
 [Parameter1]
 Name=seAuthor
 Value=Stefan Lüthi
