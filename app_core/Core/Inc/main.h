@@ -145,8 +145,8 @@ void Error_Handler(void);
 #define STMOD_UART4_TXD_GPIO_Port GPIOH
 #define STMOD_UART4_RXD_Pin GPIO_PIN_14
 #define STMOD_UART4_RXD_GPIO_Port GPIOH
-#define PMOD_SPI2_NSS_Pin GPIO_PIN_0
-#define PMOD_SPI2_NSS_GPIO_Port GPIOI
+#define TOF_CS1_Pin GPIO_PIN_0
+#define TOF_CS1_GPIO_Port GPIOI
 #define PMOD_GPIO_1_Pin GPIO_PIN_2
 #define PMOD_GPIO_1_GPIO_Port GPIOH
 #define QSPI_D0_Pin GPIO_PIN_9
