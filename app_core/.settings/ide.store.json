@@ -1,0 +1,7 @@
+{
+  "board": "STM32F723E-DISCO",
+  "device": "STM32F723IEK6",
+  "core": "Cortex-M7",
+  "order": 0,
+  "toolchain": "GCC"
+}
