@@ -22,6 +22,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "service/distance/app_tof.h"
+#include "stm32f723e_discovery_lcd.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -170,6 +171,9 @@ int main(void)
   MX_I2C1_Init();
   MX_USART6_UART_Init();
   /* USER CODE BEGIN 2 */
+  BSP_LCD_Init();
+  BSP_LCD_Clear(LCD_COLOR_BLACK);
+
   MX_TOF_Init();
   /* USER CODE END 2 */
 

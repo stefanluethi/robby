@@ -68,5 +68,6 @@ list(REMOVE_ITEM CMAKE_C_IMPLICIT_LINK_LIBRARIES ob)
 target_link_libraries(${CMAKE_PROJECT_NAME}
     stm32cubemx
     st::tof::vl53l8cx
+    st::cubef7
     # Add user defined libraries
 )
