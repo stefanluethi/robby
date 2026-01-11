@@ -15,6 +15,7 @@
 #define CONF_POLLING_PERIOD (1U)
 #define CONF_SENSOR_FREQUENCY_HZ (10U)
 #define CONF_N_SENSORS (3U)
+#define SENSOR_INTEGRATION_TIME_MS (10U)
 
 #define MAX_DISTANCE_MM (4000.0F)
 #define SENSOR_RESOLUTION (VL53L8CX_RESOLUTION_8X8)
@@ -92,8 +93,9 @@ bool setup_sensor(VL53L8CX_Configuration *device) {
     int32_t status =
         vl53l8cx_set_ranging_frequency_hz(device, CONF_SENSOR_FREQUENCY_HZ);
     status |=
-        vl53l8cx_set_ranging_mode(device, VL53L8CX_RANGING_MODE_CONTINUOUS);
+        vl53l8cx_set_ranging_mode(device, VL53L8CX_RANGING_MODE_AUTONOMOUS);
     status |= vl53l8cx_set_resolution(device, SENSOR_RESOLUTION);
+    status |= vl53l8cx_set_integration_time_ms(device, SENSOR_INTEGRATION_TIME_MS);
     status |= vl53l8cx_set_external_sync_pin_enable(device, true);
     return status != 0;
 }
