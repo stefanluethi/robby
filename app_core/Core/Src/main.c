@@ -171,7 +171,7 @@ int main(void)
   MX_I2C1_Init();
   MX_USART6_UART_Init();
   /* USER CODE BEGIN 2 */
-  BSP_LCD_Init();
+  BSP_LCD_InitEx(LCD_ORIENTATION_LANDSCAPE_ROT180);
   BSP_LCD_Clear(LCD_COLOR_BLACK);
 
   MX_TOF_Init();
