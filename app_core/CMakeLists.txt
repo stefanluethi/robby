@@ -47,7 +47,7 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
-    src/service/distance/app_tof.c
+    src/service/distance/distance_visualizer.c
     src/service/distance/tof_platform.c
     src/util/colormap.c
 )

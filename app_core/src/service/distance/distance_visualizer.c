@@ -1,25 +1,5 @@
-/**
- ******************************************************************************
- * @file          : app_tof.c
- * @author        : IMG SW Application Team
- * @brief         : This file provides code for the configuration
- *                  of the STMicroelectronics.X-CUBE-TOF1.3.4.2 instances.
- ******************************************************************************
- *
- * @attention
- *
- * Copyright (c) 2023 STMicroelectronics.
- * All rights reserved.
- *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
- *
- ******************************************************************************
- */
 
-/* Includes ------------------------------------------------------------------*/
-#include "app_tof.h"
+#include "distance_visualizer.h"
 #include "main.h"
 #include "stm32f7xx_hal_gpio.h"
 #include "util/colormap.h"
@@ -32,37 +12,27 @@
 #include <stdint.h>
 #include <stdio.h>
 
-// #include "app_tof_pin_conf.h"
 
-/* Private typedef -----------------------------------------------------------*/
-
-/* Private define ------------------------------------------------------------*/
-#define TIMING_BUDGET (30U) /* 5 ms < TimingBudget < 100 ms */
-#define RANGING_FREQUENCY                                                      \
-    (10U) /* Ranging frequency Hz (shall be consistent with TimingBudget       \
-           * value)                                                            \
-           */
 #define POLLING_PERIOD (1)
 
-/* Private variables ---------------------------------------------------------*/
+
 extern UART_HandleTypeDef huart6;
 
 static VL53L8CX_Configuration device;
 static VL53L8CX_ResultsData results;
-bool data_ready;
+static bool data_ready;
 
 
-/* Private function prototypes -----------------------------------------------*/
 static void MX_53L8A1_SimpleRanging_Init(void);
 static void MX_53L8A1_SimpleRanging_Process(void);
 static void draw_results(VL53L8CX_ResultsData *result);
 
-void MX_TOF_Init(void) { MX_53L8A1_SimpleRanging_Init(); }
+void DIST_Init(void) { MX_53L8A1_SimpleRanging_Init(); }
 
 /*
  * LM background task
  */
-void MX_TOF_Process(void) { MX_53L8A1_SimpleRanging_Process(); }
+void DIST_Process(void) { MX_53L8A1_SimpleRanging_Process(); }
 
 void MX_53L8A1_SimpleRanging_Init(void) {
     printf("Sensor initialization...\n");
@@ -102,12 +72,12 @@ void MX_53L8A1_SimpleRanging_Process(void) {
     }
 }
 
-void TOF_ConversionDoneCallback(void)
+void DIST_ConversionDoneCallback(void)
 {
     data_ready = true;
 }
 
-static void draw_results(VL53L8CX_ResultsData *result) {
+void draw_results(VL53L8CX_ResultsData *result) {
     // pixel (0,0) is top left on the screen while it's bottom left on the
     // sensor
     for (uint8_t y = 0; y < 8U; ++y) {

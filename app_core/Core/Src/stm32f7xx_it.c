@@ -22,7 +22,7 @@
 #include "stm32f7xx_it.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "service/distance/app_tof.h"
+#include "service/distance/distance_visualizer.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -265,7 +265,7 @@ void OTG_HS_IRQHandler(void)
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
   if (GPIO_Pin == TOF_INT_Pin)
   {
-    TOF_ConversionDoneCallback();
+    DIST_ConversionDoneCallback();
   }
 }
 /* USER CODE END 1 */

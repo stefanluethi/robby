@@ -21,7 +21,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "service/distance/app_tof.h"
+#include "service/distance/distance_visualizer.h"
 #include "stm32f723e_discovery_lcd.h"
 /* USER CODE END Includes */
 
@@ -174,14 +174,14 @@ int main(void)
   BSP_LCD_InitEx(LCD_ORIENTATION_LANDSCAPE_ROT180);
   BSP_LCD_Clear(LCD_COLOR_BLACK);
 
-  MX_TOF_Init();
+  DIST_Init();
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    MX_TOF_Process();
+    DIST_Process();
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
