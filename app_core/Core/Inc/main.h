@@ -83,6 +83,8 @@ void Error_Handler(void);
 #define PSRAM_NE1_GPIO_Port GPIOD
 #define UART_TXD_WIFI_RX_Pin GPIO_PIN_12
 #define UART_TXD_WIFI_RX_GPIO_Port GPIOC
+#define TOF_SYNC3_Pin GPIO_PIN_15
+#define TOF_SYNC3_GPIO_Port GPIOA
 #define ARD_D8_GPIO_Pin GPIO_PIN_4
 #define ARD_D8_GPIO_GPIO_Port GPIOE
 #define ARD_D3_TIM9_CH1_Pin GPIO_PIN_5
@@ -97,6 +99,7 @@ void Error_Handler(void);
 #define QSPI_NCS_GPIO_Port GPIOB
 #define SAI2_INT_Pin GPIO_PIN_15
 #define SAI2_INT_GPIO_Port GPIOG
+#define SAI2_INT_EXTI_IRQn EXTI15_10_IRQn
 #define PMOD_GPIO_0_Pin GPIO_PIN_12
 #define PMOD_GPIO_0_GPIO_Port GPIOG
 #define SAI2_SD_B_Pin GPIO_PIN_10
@@ -105,6 +108,9 @@ void Error_Handler(void);
 #define WIFI_GPIO_2_GPIO_Port GPIOD
 #define LCD_PSRAM_D2_Pin GPIO_PIN_0
 #define LCD_PSRAM_D2_GPIO_Port GPIOD
+#define TOF_INT_Pin GPIO_PIN_11
+#define TOF_INT_GPIO_Port GPIOC
+#define TOF_INT_EXTI_IRQn EXTI15_10_IRQn
 #define QSPI_D1_Pin GPIO_PIN_10
 #define QSPI_D1_GPIO_Port GPIOC
 #define SAI2_FS_A_Pin GPIO_PIN_7
@@ -119,10 +125,10 @@ void Error_Handler(void);
 #define LCD_PSRAM_NWE_GPIO_Port GPIOD
 #define LCD_PSRAM_D3_Pin GPIO_PIN_1
 #define LCD_PSRAM_D3_GPIO_Port GPIOD
-#define STMOD__SPI2_MOSIs_Pin GPIO_PIN_3
-#define STMOD__SPI2_MOSIs_GPIO_Port GPIOI
-#define STMOD_SPI2_MISOs_Pin GPIO_PIN_2
-#define STMOD_SPI2_MISOs_GPIO_Port GPIOI
+#define TOF_MOSI_Pin GPIO_PIN_3
+#define TOF_MOSI_GPIO_Port GPIOI
+#define TOF_MISO_Pin GPIO_PIN_2
+#define TOF_MISO_GPIO_Port GPIOI
 #define CTP_INT_Pin GPIO_PIN_9
 #define CTP_INT_GPIO_Port GPIOI
 #define SAI2_MCLK_A_Pin GPIO_PIN_4
@@ -135,8 +141,8 @@ void Error_Handler(void);
 #define UART_RXD_WIFI_TX_GPIO_Port GPIOD
 #define PMOD_SEL_0_Pin GPIO_PIN_15
 #define PMOD_SEL_0_GPIO_Port GPIOH
-#define PMOD_SPI2_SCK_Pin GPIO_PIN_1
-#define PMOD_SPI2_SCK_GPIO_Port GPIOI
+#define TOF_SCK_Pin GPIO_PIN_1
+#define TOF_SCK_GPIO_Port GPIOI
 #define USB_OTG_FS_ID_Pin GPIO_PIN_10
 #define USB_OTG_FS_ID_GPIO_Port GPIOA
 #define PSRAM_A0_Pin GPIO_PIN_0
@@ -207,6 +213,10 @@ void Error_Handler(void);
 #define ARD_A4_GPIO_Port GPIOC
 #define ARD_A5_Pin GPIO_PIN_1
 #define ARD_A5_GPIO_Port GPIOC
+#define TOF_SYNC2_Pin GPIO_PIN_2
+#define TOF_SYNC2_GPIO_Port GPIOC
+#define TOF_SYNC1_Pin GPIO_PIN_3
+#define TOF_SYNC1_GPIO_Port GPIOC
 #define QSPI_CLK_Pin GPIO_PIN_2
 #define QSPI_CLK_GPIO_Port GPIOB
 #define PSRAM_A11_Pin GPIO_PIN_1
@@ -267,6 +277,7 @@ void Error_Handler(void);
 #define USB_OTG_HS_ID_GPIO_Port GPIOB
 #define USB_OTG_HS_VBUS_Pin GPIO_PIN_13
 #define USB_OTG_HS_VBUS_GPIO_Port GPIOB
+#define USB_OTG_HS_VBUS_EXTI_IRQn EXTI15_10_IRQn
 #define LCD_PSRAM_D14_Pin GPIO_PIN_9
 #define LCD_PSRAM_D14_GPIO_Port GPIOD
 #define LCD_PSRAM_D13_Pin GPIO_PIN_8
@@ -277,8 +288,8 @@ void Error_Handler(void);
 #define SYS_LD_USER1_GPIO_Port GPIOA
 #define SYS_LD_USER2_Pin GPIO_PIN_1
 #define SYS_LD_USER2_GPIO_Port GPIOB
-#define PMOD_RESET_Pin GPIO_PIN_11
-#define PMOD_RESET_GPIO_Port GPIOF
+#define TOF_CS3_Pin GPIO_PIN_11
+#define TOF_CS3_GPIO_Port GPIOF
 #define PSRAM_A8_Pin GPIO_PIN_14
 #define PSRAM_A8_GPIO_Port GPIOF
 #define LCD_PSRAM_D4_Pin GPIO_PIN_7
@@ -291,6 +302,9 @@ void Error_Handler(void);
 #define LCD_PSRAM_D12_GPIO_Port GPIOE
 #define USB_OTGFS_OVCR_INT_Pin GPIO_PIN_10
 #define USB_OTGFS_OVCR_INT_GPIO_Port GPIOB
+#define USB_OTGFS_OVCR_INT_EXTI_IRQn EXTI15_10_IRQn
+#define TOF_CS2_Pin GPIO_PIN_11
+#define TOF_CS2_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 
