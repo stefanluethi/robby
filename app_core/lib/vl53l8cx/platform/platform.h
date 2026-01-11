@@ -27,8 +27,6 @@
 
 typedef struct
 {
-	/* To be filled with customer's platform. At least an I2C address/descriptor
-	 * needs to be added */
 	/* Note: For SPI example, this field is not used */
     uint16_t address;
 

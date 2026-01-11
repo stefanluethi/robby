@@ -20,6 +20,24 @@
 
 extern SPI_HandleTypeDef hspi2;
 
+static GPIO_TypeDef* sensor_chip_selec_port = NULL;
+static uint16_t sensor_chip_selec_pin = 0;
+
+static void select_sensor(uint8_t sensor_index)
+{
+	if (sensor_index == 0U) {
+		sensor_chip_selec_port = TOF_CS1_GPIO_Port;
+		sensor_chip_selec_pin = TOF_CS1_Pin;
+	} else if (sensor_index == 1U) {
+		sensor_chip_selec_port = TOF_CS2_GPIO_Port;
+		sensor_chip_selec_pin = TOF_CS2_Pin;
+	} else if (sensor_index == 2U) {
+		sensor_chip_selec_port = TOF_CS3_GPIO_Port;
+		sensor_chip_selec_pin = TOF_CS3_Pin;
+	}
+}
+
+
 uint8_t VL53L8CX_RdByte(
 		VL53L8CX_Platform *p_platform,
 		uint16_t RegisterAdress,
@@ -78,9 +96,10 @@ uint8_t VL53L8CX_WrMulti(
 
 		data_size += 2;
 
-		HAL_GPIO_WritePin(TOF_CS1_GPIO_Port, TOF_CS1_Pin, GPIO_PIN_RESET);
+		select_sensor(p_platform->address);
+		HAL_GPIO_WritePin(sensor_chip_selec_port, sensor_chip_selec_pin, GPIO_PIN_RESET);
 		status |= HAL_SPI_Transmit(&hspi2, data_write, data_size, 100*data_size);
-		HAL_GPIO_WritePin(TOF_CS1_GPIO_Port, TOF_CS1_Pin, GPIO_PIN_SET);
+		HAL_GPIO_WritePin(sensor_chip_selec_port, sensor_chip_selec_pin, GPIO_PIN_SET);
 	}
 
 	return status;
@@ -121,12 +140,11 @@ uint8_t VL53L8CX_RdMulti(
 		data_write[0] = SPI_READ_MASK(temp) >> 8;
 		data_write[1] = SPI_READ_MASK(temp) & 0xFF;
 
-
-
-		HAL_GPIO_WritePin(TOF_CS1_GPIO_Port, TOF_CS1_Pin, GPIO_PIN_RESET);
+		select_sensor(p_platform->address);
+		HAL_GPIO_WritePin(sensor_chip_selec_port, sensor_chip_selec_pin, GPIO_PIN_RESET);
 		status |= HAL_SPI_Transmit(&hspi2, data_write, 2, 0x1000);
 		status |= HAL_SPI_Receive(&hspi2, p_values + position, data_size, 100*data_size);
-		HAL_GPIO_WritePin(TOF_CS1_GPIO_Port, TOF_CS1_Pin, GPIO_PIN_SET);
+		HAL_GPIO_WritePin(sensor_chip_selec_port, sensor_chip_selec_pin, GPIO_PIN_SET);
 	}
 
 	return status;
