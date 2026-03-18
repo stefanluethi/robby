@@ -1,5 +1,7 @@
 use std::collections::BTreeMap;
 
+use proto::TaskManager;
+
 const ESP_SAMPLING_FREQUENCY: f32 = 20e3;
 
 #[derive(serde::Deserialize, serde::Serialize, PartialEq, Debug, Clone, Copy)]
@@ -8,28 +10,27 @@ enum ScopeMode {
     Scan,
 }
 
-#[derive(serde::Deserialize, serde::Serialize, PartialEq, Clone, Copy)]
-#[repr(u32)]
-enum FFTSamples {
-    _512 = 512,
-    _1024 = 1024,
-    _2048 = 2048,
-    _4096 = 4096,
-    _8192 = 8192,
-    _16384 = 16384,
-    _32768 = 32768,
-}
-
-impl Into<String> for FFTSamples {
-    fn into(self) -> String {
-        format!("{}", self as u32)
-    }
-}
-
 #[derive(serde::Deserialize, serde::Serialize)]
 enum Pane {
     Plots,
     Logs,
+    TaskManager,
+}
+
+impl From<&Pane> for &str {
+    fn from(value: &Pane) -> Self {
+        match value {
+            Pane::Plots => "Plots",
+            Pane::Logs => "Logs",
+            Pane::TaskManager => "Task Manager",
+        }
+    }
+}
+
+impl From<&mut Pane> for &str {
+    fn from(value: &mut Pane) -> Self {
+        (value as &Pane).into()
+    }
 }
 
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -38,8 +39,7 @@ pub struct AppState {
     esp_address: String,
     samples: Vec<f32>,
     scope_mode: ScopeMode,
-    fft_samples: FFTSamples,
-    fft_frequence_end: f32,
+    task_manager: proto::TaskManager,
 
     #[serde(skip)]
     ws_receiver: Option<ewebsock::WsReceiver>,
@@ -53,8 +53,9 @@ impl Default for AppState {
             esp_address: "ws://192.168.1.70/ws/adc".to_owned(),
             samples: vec![],
             scope_mode: ScopeMode::Full,
-            fft_samples: FFTSamples::_1024,
-            fft_frequence_end: ESP_SAMPLING_FREQUENCY / 2.0,
+            task_manager: TaskManager {
+                threads: Vec::new(),
+            },
             ws_receiver: None,
             ws_sender: None,
         }
@@ -65,7 +66,7 @@ impl AppState {
     fn websocket_connect(&mut self, ctx: egui::Context) {
         let wakeup = move || ctx.request_repaint();
         let mut options = ewebsock::Options::default();
-        options.max_incoming_frame_size = 32;
+        options.max_incoming_frame_size = 2048;
         let (sender, receiver) =
             ewebsock::connect_with_wakeup(self.esp_address.clone(), options, wakeup).unwrap();
         self.ws_receiver = Some(receiver);
@@ -93,23 +94,34 @@ impl AppState {
                             log::log!(target: "robby", log::Level::Info, "{}", msg);
                         }
                         ewebsock::WsMessage::Binary(msg) => {
-                            let message: proto::AdcMessage = postcard::from_bytes(&msg).unwrap();
-
-                            self.samples.append(
-                                &mut message
-                                    .samples
-                                    .iter()
-                                    .map(|v| f32::from(*v))
-                                    .collect::<Vec<f32>>(),
-                            );
-                            log::log!(target: "robby", log::Level::Info, "ws received {} samples", message.samples.len())
+                            // todo: find better solution!
+                            if let Ok(message) =
+                                serde_cbor_2::from_slice::<proto::TaskManager>(&msg)
+                            {
+                                for thread in message.threads.iter() {
+                                    log::log!(target: "robby", log::Level::Info, "thread info \"{}\" stack usage: {}, cpu usage {}", 
+                                    thread.name, thread.stack_usage, thread.runtime);
+                                }
+                                self.task_manager = message;
+                            } else if let Ok(message) =
+                                serde_cbor_2::from_slice::<proto::AdcMessage>(&msg)
+                            {
+                                self.samples.append(
+                                    &mut message
+                                        .samples
+                                        .iter()
+                                        .map(|v| f32::from(*v))
+                                        .collect::<Vec<f32>>(),
+                                );
+                                log::log!(target: "robby", log::Level::Trace, "ws received {} samples", message.samples.len());
+                            }
                         }
                         _ => {
                             log::log!(target: "robby", log::Level::Info, "ws unknown message received")
                         }
                     },
-                    ewebsock::WsEvent::Error(_) => {
-                        log::log!(target: "robby", log::Level::Warn, "ws error")
+                    ewebsock::WsEvent::Error(e) => {
+                        log::log!(target: "robby", log::Level::Warn, "ws error: {}", e)
                     }
                     ewebsock::WsEvent::Closed => {
                         log::log!(target: "robby", log::Level::Info, "ws disconnected")
@@ -119,8 +131,8 @@ impl AppState {
         }
     }
 
-    fn plots_ui(&mut self, ui: &mut egui::Ui) {
-        ui.heading("esp32scope");
+    fn settings_ui(&mut self, ui: &mut egui::Ui) {
+        ui.heading("robby control center");
 
         ui.horizontal(|ui| {
             ui.label("websocket address:");
@@ -143,11 +155,11 @@ impl AppState {
                 self.samples.clear();
             }
         });
-        ui.separator();
+    }
 
-        //-----------------------------------------------------------------
+    fn plots_ui(&mut self, ui: &mut egui::Ui) {
         ui.vertical(|ui| {
-            ui.set_height(ui.available_height() / 2.0);
+            ui.set_height(ui.available_height());
             ui.vertical_centered(|ui| {
                 ui.strong("Time Domain");
             });
@@ -163,7 +175,7 @@ impl AppState {
                             ui.selectable_value(&mut self.scope_mode, ScopeMode::Scan, "Scan");
                         });
                 });
-                egui_plot::Plot::new("eps32 adc plot")
+                egui_plot::Plot::new("some plot")
                     .legend(egui_plot::Legend::default().follow_insertion_order(true))
                     .x_axis_label("t / s")
                     .y_axis_label("adc")
@@ -174,9 +186,7 @@ impl AppState {
                             ScopeMode::Full => self
                                 .samples
                                 .chunks(stride_length)
-                                .map(|c| {
-                                    c.iter().sum::<f32>() as f64 / f64::from(c.len() as u32)
-                                })
+                                .map(|c| c.iter().sum::<f32>() as f64 / f64::from(c.len() as u32))
                                 .enumerate()
                                 .map(|(i, v)| {
                                     [
@@ -187,10 +197,7 @@ impl AppState {
                                 })
                                 .collect::<Vec<[f64; 2]>>(),
                             ScopeMode::Scan => {
-                                let n_samples = std::cmp::min(
-                                    self.fft_samples as usize,
-                                    self.samples.len(),
-                                );
+                                let n_samples = self.samples.len();
                                 self.samples[(self.samples.len() - n_samples)..]
                                     .iter()
                                     .enumerate()
@@ -212,91 +219,55 @@ impl AppState {
                     });
             });
         });
-        ui.separator();
+    }
 
-        //-----------------------------------------------------------------
-        ui.vertical_centered(|ui| {
-            ui.strong("Frequency Domain");
-        });
-        let fft_length = self.fft_samples as usize;
-        let n_samples = if self.samples.len() < fft_length {
-            0
-        } else {
-            fft_length
-        };
-        let hann_window = spectrum_analyzer::windows::hann_window(
-            &self.samples[(self.samples.len() - n_samples)..],
-        );
-        // calc spectrum
-        let spectrum = spectrum_analyzer::samples_fft_to_spectrum(
-            // (windowed) samples
-            &hann_window,
-            // sampling rate
-            ESP_SAMPLING_FREQUENCY as u32,
-            // optional frequency limit: e.g. only interested in frequencies 50 <= f <= 150?
-            spectrum_analyzer::FrequencyLimit::All,
-            // optional scale
-            Some(&spectrum_analyzer::scaling::divide_by_N),
-        );
+    fn task_manager_ui(&mut self, ui: &mut egui::Ui) {
+        ui.vertical(|ui| {
+            let available_height = ui.available_height();
+            let table = egui_extras::TableBuilder::new(ui)
+                .striped(true)
+                .resizable(true)
+                .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                .column(egui_extras::Column::auto())
+                .column(egui_extras::Column::auto())
+                .column(egui_extras::Column::auto())
+                .column(egui_extras::Column::remainder())
+                .column(egui_extras::Column::remainder())
+                .min_scrolled_height(0.0)
+                .max_scroll_height(available_height);
 
-        ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
-            // we need to layout the plot last so that it can fill the remaining space
-            ui.set_height(ui.available_height());
-
-            ui.horizontal(|ui| {
-                egui::ComboBox::from_label("Samples")
-                    .selected_text(format!("{}", Into::<String>::into(self.fft_samples)))
-                    .show_ui(ui, |ui| {
-                        for item in [
-                            FFTSamples::_512,
-                            FFTSamples::_1024,
-                            FFTSamples::_2048,
-                            FFTSamples::_4096,
-                            FFTSamples::_8192,
-                            FFTSamples::_16384,
-                            FFTSamples::_32768,
-                        ]
-                        .iter()
-                        {
-                            ui.selectable_value(
-                                &mut self.fft_samples,
-                                *item,
-                                Into::<String>::into(*item),
-                            );
-                        }
+            table
+                .header(20.0, |mut header| {
+                    header.col(|ui| {
+                        ui.strong("Name");
                     });
-
-                ui.separator();
-                ui.label("End frequency");
-                ui.add(
-                    egui::DragValue::new(&mut self.fft_frequence_end)
-                        .range(0.0..=ESP_SAMPLING_FREQUENCY / 2.0)
-                        .speed(100),
-                );
-            });
-            egui_plot::Plot::new("eps32 fft plot")
-                .legend(egui_plot::Legend::default().follow_insertion_order(true))
-                .x_axis_label("f / Hz")
-                .y_axis_label("dB")
-                .show(ui, |plot_fft| {
-                    let fft_line = if let Ok(s) = spectrum {
-                        s.data()
-                            .iter()
-                            .map(|(fr, fr_val)| {
-                                [fr.val() as f64, 20.0 * fr_val.val().log10() as f64]
-                            })
-                            .collect::<Vec<[f64; 2]>>()
-                    } else {
-                        Vec::new()
-                    };
-
-                    plot_fft.line(egui_plot::Line::new(
-                        "FFT",
-                        egui_plot::PlotPoints::from(fft_line),
-                    ));
-
-                    plot_fft.set_plot_bounds_y(std::ops::RangeInclusive::new(-60_f64, 40_f64));
-                    plot_fft.set_plot_bounds_x(0.0..=self.fft_frequence_end as f64);
+                    header.col(|ui| {
+                        ui.strong("Stack Usage %");
+                    });
+                    header.col(|ui| {
+                        ui.strong("Stack Usage B");
+                    });
+                    header.col(|ui| {
+                        ui.strong("CPU Load %");
+                    });
+                })
+                .body(|mut body| {
+                    for thread in self.task_manager.threads.iter() {
+                        body.row(20.0_f32, |mut row| {
+                            row.col(|ui| {
+                                ui.label(thread.name.clone());
+                            });
+                            row.col(|ui| {
+                                ui.label(format!("{}%", thread.stack_usage));
+                            });
+                            row.col(|ui| {
+                                ui.label("1200");
+                            });
+                            row.col(|ui| {
+                                ui.label(format!("{:.1}%", thread.runtime));
+                            });
+                        });
+                    }
                 });
         });
     }
@@ -309,20 +280,21 @@ impl egui_tiles::Behavior<Pane> for AppState {
         _tile_id: egui_tiles::TileId,
         pane: &mut Pane,
     ) -> egui_tiles::UiResponse {
-        let title = match pane {
-            Pane::Plots => "Plots",
-            Pane::Logs => "Logs",
-        };
-
+        let title: &str = pane.into();
         let mut drag_response = egui_tiles::UiResponse::None;
 
-        let title_bar_response = ui.horizontal(|ui| {
-            ui.add_space(4.0);
-            ui.strong(title);
-            ui.allocate_space(ui.available_size())
-        }).response;
+        let title_bar_response = ui
+            .horizontal(|ui| {
+                ui.add_space(4.0);
+                ui.strong(title);
+                ui.allocate_space(ui.available_size())
+            })
+            .response;
 
-        if title_bar_response.interact(egui::Sense::click_and_drag()).dragged() {
+        if title_bar_response
+            .interact(egui::Sense::click_and_drag())
+            .dragged()
+        {
             drag_response = egui_tiles::UiResponse::DragStarted;
         }
 
@@ -338,16 +310,16 @@ impl egui_tiles::Behavior<Pane> for AppState {
                     .include_target(false)
                     .show(ui);
             }
+            Pane::TaskManager => {
+                self.task_manager_ui(ui);
+            }
         }
 
         drag_response
     }
 
     fn tab_title_for_pane(&mut self, pane: &Pane) -> egui::WidgetText {
-        match pane {
-            Pane::Plots => "Plots".into(),
-            Pane::Logs => "Logs".into(),
-        }
+        Into::<&str>::into(pane).into()
     }
 }
 
@@ -360,25 +332,28 @@ pub struct EspApp {
 
 impl Default for EspApp {
     fn default() -> Self {
-        let mut tiles = egui_tiles::Tiles::default();
-        let plots = tiles.insert_pane(Pane::Plots);
-        let logs = tiles.insert_pane(Pane::Logs);
-        let root = tiles.insert_horizontal_tile(vec![plots, logs]);
-        let tree = egui_tiles::Tree::new("main_tree", root, tiles);
-
         Self {
             state: Default::default(),
-            tree,
+            tree: EspApp::create_tree(),
         }
     }
 }
 
 impl EspApp {
+    fn create_tree() -> egui_tiles::Tree<Pane> {
+        let mut tiles = egui_tiles::Tiles::default();
+        let plots = tiles.insert_pane(Pane::Plots);
+        let logs = tiles.insert_pane(Pane::Logs);
+        let task_manager = tiles.insert_pane(Pane::TaskManager);
+        let root = tiles.insert_horizontal_tile(vec![plots, logs, task_manager]);
+        egui_tiles::Tree::new("main_tree", root, tiles)
+    }
+
     /// Called once before the first frame.
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         // This is also where you can customize the look and feel of egui using
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
-        
+
         configure_text_styles(&cc.egui_ctx);
 
         // Load previous app state (if any).
@@ -388,15 +363,16 @@ impl EspApp {
         } else {
             Default::default()
         };
-        
+
         if app.tree.root.is_none() {
-            let mut tiles = egui_tiles::Tiles::default();
-            let plots = tiles.insert_pane(Pane::Plots);
-            let logs = tiles.insert_pane(Pane::Logs);
-            let root = tiles.insert_horizontal_tile(vec![plots, logs]);
-            app.tree = egui_tiles::Tree::new("main_tree", root, tiles);
+            app.tree = EspApp::create_tree();
         }
-        
+
+        // renew tree if new panes have been added
+        if !app.tree.inactive_tiles().is_empty() {
+            app.tree = EspApp::create_tree();
+        }
+
         app
     }
 }
@@ -408,6 +384,12 @@ impl eframe::App for EspApp {
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.state.websocket_receive();
+
+        egui::TopBottomPanel::top("top panel").show(ctx, |ui| {
+            ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
+                self.state.settings_ui(ui);
+            });
+        });
 
         egui::TopBottomPanel::bottom("bottom panel").show(ctx, |ui| {
             ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
@@ -424,8 +406,8 @@ impl eframe::App for EspApp {
 
 fn configure_text_styles(ctx: &egui::Context) {
     use egui::FontFamily::{Monospace, Proportional};
-    use egui::style::TextStyle;
     use egui::FontId;
+    use egui::style::TextStyle;
 
     let text_styles: BTreeMap<TextStyle, FontId> = [
         (TextStyle::Heading, FontId::new(24.0, Proportional)),
