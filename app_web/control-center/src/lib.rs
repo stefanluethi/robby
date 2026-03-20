@@ -2,4 +2,4 @@
 
 mod app;
 
-pub use app::EspApp;
+pub use app::App;

@@ -25,7 +25,7 @@ async fn robby(req: HttpRequest, stream: web::Payload) -> Result<HttpResponse, E
         let mut rng = rand::rng();
 
         loop {
-            let task_manager = proto::TaskManager {
+            let task_manager = proto::ThreadTable {
                 threads: vec![proto::ThreadInfo {
                     stack_usage: 72_u8,
                     runtime: 11.2_f32 + rng.random_range(0.0..10.0),
@@ -95,7 +95,7 @@ async fn robby(req: HttpRequest, stream: web::Payload) -> Result<HttpResponse, E
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     HttpServer::new(|| App::new().route("/robby", web::get().to(robby)))
-        .bind(("127.0.0.1", 8080))?
+        .bind(("127.0.0.1", 3000))?
         .run()
         .await
 }

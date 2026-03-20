@@ -12,6 +12,6 @@ pub struct ThreadInfo {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq)]
-pub struct TaskManager {
+pub struct ThreadTable {
     pub threads: Vec<ThreadInfo>,
 }
