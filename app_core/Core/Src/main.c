@@ -23,6 +23,9 @@
 /* USER CODE BEGIN Includes */
 #include "service/distance/distance_visualizer.h"
 #include "stm32f723e_discovery_lcd.h"
+#include "stm32f7xx_hal_def.h"
+#include "stm32f7xx_hal_uart.h"
+#include <stdint.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -1143,7 +1146,7 @@ static void MX_USART2_UART_Init(void)
 
   /* USER CODE END USART2_Init 1 */
   huart2.Instance = USART2;
-  huart2.Init.BaudRate = 115200;
+  huart2.Init.BaudRate = 1000000;
   huart2.Init.WordLength = UART_WORDLENGTH_8B;
   huart2.Init.StopBits = UART_STOPBITS_1;
   huart2.Init.Parity = UART_PARITY_NONE;

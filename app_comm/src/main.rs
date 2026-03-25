@@ -2,15 +2,18 @@
 
 use core::convert::TryInto;
 
-use embedded_svc::{
-    wifi::{self, AuthMethod},
-};
+use embedded_svc::wifi::{self, AuthMethod};
+use esp_idf_hal::uart::*;
 
-use esp_idf_svc::{
-    eventloop::EspSystemEventLoop, http::server::EspHttpServer, nvs::EspDefaultNvsPartition, wifi::{BlockingWifi, EspWifi}
-};
 use esp_idf_svc::hal::peripherals::Peripherals;
 use esp_idf_svc::sys::EspError;
+use esp_idf_svc::{
+    eventloop::EspSystemEventLoop,
+    http::server::EspHttpServer,
+    nvs::EspDefaultNvsPartition,
+    wifi::{BlockingWifi, EspWifi},
+    ws::FrameType,
+};
 
 use log::*;
 
@@ -35,6 +38,19 @@ fn main() -> anyhow::Result<()> {
     let mut led_conn = esp_idf_hal::gpio::PinDriver::output(peripherals.pins.gpio15).unwrap();
     led_conn.set_high().ok();
 
+    // configure uart
+    let tx = peripherals.pins.gpio16;
+    let rx = peripherals.pins.gpio17;
+    let config = config::Config::new().baudrate(esp_idf_hal::units::Hertz(1_000_000));
+    let uart = UartDriver::new(
+        peripherals.uart1,
+        tx,
+        rx,
+        Option::<esp_idf_hal::gpio::Gpio0>::None,
+        Option::<esp_idf_hal::gpio::Gpio1>::None,
+        &config,
+    )?;
+
     // configure web server
     let mut server = create_server(peripherals.modem)?;
     led_conn.set_low().ok();
@@ -42,7 +58,7 @@ fn main() -> anyhow::Result<()> {
     let websocket_sender = Arc::new(Mutex::new(None));
     {
         let socket_sender = websocket_sender.clone();
-        server.ws_handler("/ws/robby", None,  move |ws| {
+        server.ws_handler("/ws/robby", None, move |ws| {
             if ws.is_new() {
                 if let Ok(mut socket) = socket_sender.try_lock() {
                     *socket = Some(ws.create_detached_sender().unwrap());
@@ -63,7 +79,21 @@ fn main() -> anyhow::Result<()> {
     }
 
     let mut led_div_counter = 0_u16;
+    let mut buf = [0_u8; 512];
     loop {
+        let result = uart.read(&mut buf, esp_idf_hal::delay::NON_BLOCK);
+        match (result, websocket_sender.try_lock()) {
+            (Ok(bytes_read), Ok(mut socket)) => {
+                if let Some(ws) = socket.as_mut() {
+                    info!("forwarding {}B from UART to websocket", bytes_read);
+                    if ws.send(FrameType::Text(false), &buf[..bytes_read]).is_err() {
+                        warn!("Failed to send message");
+                    }
+                }
+            }
+            (_, Err(_)) => warn!("websocket lock error"),
+            (_,_) => (),
+        };
 
         if led_div_counter >= 10 {
             led_conn.toggle().ok();
@@ -79,18 +109,14 @@ fn create_server(modem: esp_idf_hal::modem::Modem) -> anyhow::Result<EspHttpServ
     let sys_loop = EspSystemEventLoop::take()?;
     let nvs = EspDefaultNvsPartition::take()?;
 
-    let mut wifi = BlockingWifi::wrap(
-        EspWifi::new(modem, sys_loop.clone(), Some(nvs))?,
-        sys_loop,
-    )?;
+    let mut wifi = BlockingWifi::wrap(EspWifi::new(modem, sys_loop.clone(), Some(nvs))?, sys_loop)?;
 
-    let wifi_configuration = wifi::Configuration::AccessPoint(
-        wifi::AccessPointConfiguration {
-            ssid: WIFI_SSID.try_into().unwrap(),
-            ssid_hidden: false,
-            auth_method: AuthMethod::WPA2Personal,
-            password: WIFI_PASSWORD.try_into().unwrap(),
-            ..Default::default()
+    let wifi_configuration = wifi::Configuration::AccessPoint(wifi::AccessPointConfiguration {
+        ssid: WIFI_SSID.try_into().unwrap(),
+        ssid_hidden: false,
+        auth_method: AuthMethod::WPA2Personal,
+        password: WIFI_PASSWORD.try_into().unwrap(),
+        ..Default::default()
     });
 
     wifi.set_configuration(&wifi_configuration)?;
@@ -113,4 +139,3 @@ fn create_server(modem: esp_idf_hal::modem::Modem) -> anyhow::Result<EspHttpServ
 
     Ok(EspHttpServer::new(&server_configuration)?)
 }
-

@@ -2,6 +2,7 @@
 #include "distance_visualizer.h"
 #include "main.h"
 #include "stm32f7xx_hal_gpio.h"
+#include "stm32f7xx_hal_uart.h"
 #include "util/colormap.h"
 
 #include <stm32f723e_discovery_lcd.h>
@@ -21,6 +22,8 @@
 #define SENSOR_RESOLUTION (VL53L8CX_RESOLUTION_8X8)
 #define SENSOR_RESOLUTION_X (8U)
 #define SENSOR_RESOLUTION_Y (8U)
+
+extern UART_HandleTypeDef huart2;
 
 typedef enum {
     SENSOR_RIGHT = 0U,
@@ -69,6 +72,9 @@ void DIST_Process(void) {
     }
 
     while (1) {
+        char message[] = "hello world!\n";
+        HAL_UART_Transmit(&huart2, (const uint8_t*)message, sizeof(message), HAL_MAX_DELAY);
+
         for (uint8_t i = 0; i < CONF_N_SENSORS; ++i) {
             trigger_sensor(i);
 
