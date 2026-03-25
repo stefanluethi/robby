@@ -6,8 +6,12 @@ edition = "2024"
 [dependencies]
 actix-web = "4.13.0"
 actix-ws = "0.4.0"
+env_logger = "0.11.10"
 futures-util = "0.3.32"
+hex-string = "0.1.0"
+log = "0.4.29"
 
 proto = { version = "*", path = "../proto" }
 rand = "0.10.0"
 serde_cbor_2 = "0.13.0"
+simple_logger = "5.2.0"

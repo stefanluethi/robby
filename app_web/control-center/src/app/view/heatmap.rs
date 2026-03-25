@@ -2,7 +2,9 @@ use super::Viewable;
 
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)]
-pub struct Heatmap {}
+pub struct Heatmap {
+    distance_map: proto::DistanceMap,
+}
 
 impl Default for Heatmap {
     fn default() -> Self {
@@ -12,18 +14,25 @@ impl Default for Heatmap {
 
 impl Heatmap {
     pub fn new() -> Self {
-        Self {}
+        Self {
+            distance_map: proto::DistanceMap { distances_mm: [[0;_];_] }
+        }
+    }
+
+    pub fn update(&mut self, distances: proto::DistanceMap) {
+        self.distance_map = distances;
     }
 
 }
 
 impl Viewable for Heatmap {
     fn view(&mut self, ui: &mut egui::Ui) {
+        let size = (self.distance_map.distances_mm.len(), self.distance_map.distances_mm[0].len());
+
         let remainder = ui.available_rect_before_wrap();
-        let min_size = remainder.size().x.min(remainder.size().y);
-        let rect_size: f32 = min_size / 7.0;
-        for x in 0..7 {
-            for y in 0..7 {
+        let rect_size: f32 = (remainder.size().x / (size.0 - 1) as f32).min(remainder.size().y / (size.1 - 1) as f32);
+        for x in 0..size.0 - 1 {
+            for y in 0..size.1 - 1 {
                 ui.painter().rect_filled(
                     egui::Rect {
                         min: remainder.left_top()
@@ -32,7 +41,7 @@ impl Viewable for Heatmap {
                             + egui::vec2(rect_size * (x + 1) as f32, rect_size * (y + 1) as f32),
                     },
                     0.0,
-                    super::colormap::map_color((x + y) as f32 / 14.0),
+                    super::colormap::map_color(self.distance_map.distances_mm[x][y] as f32 / 4000.0_f32),
                 );
             }
         }

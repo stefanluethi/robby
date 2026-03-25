@@ -8,8 +8,8 @@ use actix_web::{
 
 use actix_ws::AggregatedMessage;
 use futures_util::StreamExt;
-use proto::{self, AdcMessage};
 use rand::RngExt;
+use log;
 
 async fn robby(req: HttpRequest, stream: web::Payload) -> Result<HttpResponse, Error> {
     let (res, mut session, stream) = actix_ws::handle(&req, stream)?;
@@ -25,16 +25,19 @@ async fn robby(req: HttpRequest, stream: web::Payload) -> Result<HttpResponse, E
         let mut rng = rand::rng();
 
         loop {
-            let task_manager = proto::ThreadTable {
+            let thread_table = proto::ThreadTable {
                 threads: vec![proto::ThreadInfo {
                     stack_usage: 72_u8,
                     runtime: 11.2_f32 + rng.random_range(0.0..10.0),
                     name: "blinky".to_owned(),
                 }],
             };
+            let message = proto::Message {
+                payload: proto::Payload::ThreadTable(thread_table),
+            };
 
-            let message = serde_cbor_2::to_vec(&task_manager).unwrap();
-            if task_manager_sender.binary(message).await.is_err() {
+            let message_raw = serde_cbor_2::to_vec(&message).unwrap();
+            if task_manager_sender.binary(message_raw).await.is_err() {
                 break;
             }
             sleep(Duration::from_millis(500)).await;
@@ -47,14 +50,39 @@ async fn robby(req: HttpRequest, stream: web::Payload) -> Result<HttpResponse, E
         let mut rng = rand::rng();
 
         loop {
-            let message = AdcMessage {
-                samples: (0..16).map(|_| rng.random_range(0..u16::MAX)).collect(),
+            let frame = proto::StreamFrameRaw {
+                id: 42,
+                values: (0..16).map(|_| rng.random_range(0..u32::MAX)).collect(),
+            };
+            let message = proto::Message {
+                payload: proto::Payload::StreamFrame(frame),
             };
 
-            let message = serde_cbor_2::to_vec(&message).unwrap();
-            if measurement_sender.binary(message).await.is_err() {
+            let message_raw = serde_cbor_2::to_vec(&message).unwrap();
+            // log::info!("measurement {}", hex_string::HexString::from_bytes(&message_raw).as_string());
+            if measurement_sender.binary(message_raw).await.is_err() {
                 break;
             }
+
+            // ------
+            let mut distances_mm: [[i16;8];24] = [[0; 8]; 24];
+            for column in distances_mm.iter_mut() {
+                for cell in column.iter_mut() {
+                    *cell = rng.random_range(0..4000_i16);
+                }
+            };
+            let distance_map = proto::DistanceMap {
+                distances_mm,
+            };
+            let message_distance = proto::Message {
+                payload: proto::Payload::DistanceMap(distance_map),
+            };
+            let distance_raw = serde_cbor_2::to_vec(&message_distance).unwrap();
+            log::info!("distance {}", hex_string::HexString::from_bytes(&distance_raw).as_string());
+            if measurement_sender.binary(distance_raw).await.is_err() {
+                break;
+            }
+
             sleep(Duration::from_millis(20)).await;
         }
     });
@@ -94,6 +122,9 @@ async fn robby(req: HttpRequest, stream: web::Payload) -> Result<HttpResponse, E
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    simple_logger::init().unwrap();
+    log::set_max_level(log::LevelFilter::Info);
+
     HttpServer::new(|| App::new().route("/robby", web::get().to(robby)))
         .bind(("127.0.0.1", 3000))?
         .run()

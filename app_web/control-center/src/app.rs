@@ -1,7 +1,8 @@
+mod proto_parser;
 mod view;
 
-use view::Viewable;
 use std::collections::BTreeMap;
+use view::Viewable;
 
 #[derive(serde::Deserialize, serde::Serialize)]
 enum Pane {
@@ -87,25 +88,31 @@ impl Views {
                             log::log!(target: "robby", log::Level::Info, "{}", msg);
                         }
                         ewebsock::WsMessage::Binary(msg) => {
-                            // todo: find better solution!
-                            if let Ok(message) =
-                                serde_cbor_2::from_slice::<proto::ThreadTable>(&msg)
-                            {
-                                for thread in message.threads.iter() {
-                                    log::log!(target: "robby", log::Level::Info, "thread info \"{}\" stack usage: {}, cpu usage {}", 
-                                    thread.name, thread.stack_usage, thread.runtime);
+                            let message: proto::Message = serde_cbor_2::from_slice(&msg).unwrap();
+                            match message.payload {
+                                proto::Payload::StreamAnnounce(_) => todo!(),
+                                proto::Payload::StreamFrame(frame) => {
+                                    self.adc_plot.update(
+                                        frame
+                                            .values
+                                            .iter()
+                                            .map(|v| f64::from(*v) as f32)
+                                            .collect::<Vec<f32>>(),
+                                    );
+                                    log::log!(target: "robby", log::Level::Trace, "ws received {} samples", frame.values.len());
                                 }
-                                self.task_manager.update(message);
-                            } else if let Ok(message) =
-                                serde_cbor_2::from_slice::<proto::AdcMessage>(&msg)
-                            {
-                                self.adc_plot.update( message
-                                        .samples
-                                        .iter()
-                                        .map(|v| f32::from(*v))
-                                        .collect::<Vec<f32>>());
-                                log::log!(target: "robby", log::Level::Trace, "ws received {} samples", message.samples.len());
-                            }
+                                proto::Payload::Log(_) => todo!(),
+                                proto::Payload::ThreadTable(thread_table) => {
+                                    for thread in thread_table.threads.iter() {
+                                        log::log!(target: "robby", log::Level::Info, "thread info \"{}\" stack usage: {}, cpu usage {}", 
+                                        thread.name, thread.stack_usage, thread.runtime);
+                                    }
+                                    self.task_manager.update(thread_table);
+                                }
+                                proto::Payload::DistanceMap(distances) => {
+                                    self.room_view.update(distances);
+                                },
+                            };
                         }
                         _ => {
                             log::log!(target: "robby", log::Level::Info, "ws unknown message received")
