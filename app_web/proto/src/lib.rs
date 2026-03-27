@@ -39,7 +39,7 @@ pub struct LogRecord {
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct DistanceMap {
-    pub distances_mm: [[i16; 8]; 24],
+    pub distances_mm: [[u16; 8]; 24],
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]

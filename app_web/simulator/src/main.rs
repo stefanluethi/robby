@@ -8,8 +8,8 @@ use actix_web::{
 
 use actix_ws::AggregatedMessage;
 use futures_util::StreamExt;
-use rand::RngExt;
 use log;
+use rand::RngExt;
 
 async fn robby(req: HttpRequest, stream: web::Payload) -> Result<HttpResponse, Error> {
     let (res, mut session, stream) = actix_ws::handle(&req, stream)?;
@@ -65,20 +65,21 @@ async fn robby(req: HttpRequest, stream: web::Payload) -> Result<HttpResponse, E
             }
 
             // ------
-            let mut distances_mm: [[i16;8];24] = [[0; 8]; 24];
+            let mut distances_mm: [[i16; 8]; 24] = [[0; 8]; 24];
             for column in distances_mm.iter_mut() {
                 for cell in column.iter_mut() {
                     *cell = rng.random_range(0..4000_i16);
                 }
-            };
-            let distance_map = proto::DistanceMap {
-                distances_mm,
-            };
+            }
+            let distance_map = proto::DistanceMap { distances_mm };
             let message_distance = proto::Message {
                 payload: proto::Payload::DistanceMap(distance_map),
             };
             let distance_raw = serde_cbor_2::to_vec(&message_distance).unwrap();
-            log::info!("distance {}", hex_string::HexString::from_bytes(&distance_raw).as_string());
+            log::info!(
+                "distance {}",
+                hex_string::HexString::from_bytes(&distance_raw).as_string()
+            );
             if measurement_sender.binary(distance_raw).await.is_err() {
                 break;
             }

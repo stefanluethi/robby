@@ -41,7 +41,9 @@ fn main() -> anyhow::Result<()> {
     // configure uart
     let tx = peripherals.pins.gpio16;
     let rx = peripherals.pins.gpio17;
-    let config = config::Config::new().baudrate(esp_idf_hal::units::Hertz(1_000_000));
+    let config = config::Config::new()
+        .baudrate(esp_idf_hal::units::Hertz(1_000_000))
+        .rx_fifo_size(2048);
     let uart = UartDriver::new(
         peripherals.uart1,
         tx,
@@ -79,21 +81,59 @@ fn main() -> anyhow::Result<()> {
     }
 
     let mut led_div_counter = 0_u16;
-    let mut buf = [0_u8; 512];
+    let mut buf = [0_u8; 1024];
+    let mut received_accumulated: usize = 0;
     loop {
-        let result = uart.read(&mut buf, esp_idf_hal::delay::NON_BLOCK);
-        match (result, websocket_sender.try_lock()) {
-            (Ok(bytes_read), Ok(mut socket)) => {
-                if let Some(ws) = socket.as_mut() {
-                    info!("forwarding {}B from UART to websocket", bytes_read);
-                    if ws.send(FrameType::Text(false), &buf[..bytes_read]).is_err() {
-                        warn!("Failed to send message");
+        // let result = uart.read(&mut buf, 2000000);
+        while let Some((event, _)) = uart.event_queue().unwrap().recv_front(0) {
+            // info!("uart event {:?}", event.payload());
+            let evt = event.payload();
+            match evt {
+                UartEventPayload::Data { size, timeout } => {
+                    received_accumulated += size;
+                    if timeout {
+                        info!("uart received {}B", received_accumulated);
+
+                        let result = uart.read(&mut buf, 0);
+                        if let Ok(bytes_read) = result {
+                            info!("forwarding {}B from UART to websocket", bytes_read);
+                        }
+
+                        match (result, websocket_sender.try_lock()) {
+                            (Ok(bytes_read), Ok(mut socket)) => {
+                                if let Some(ws) = socket.as_mut() {
+                                    if ws
+                                        .send(FrameType::Binary(false), &buf[..bytes_read])
+                                        .is_err()
+                                    {
+                                        warn!("Failed to send message");
+                                    }
+                                }
+                            }
+                            (_, Err(_)) => warn!("websocket lock error"),
+                            (_, _) => (),
+                        };
+
+                        received_accumulated = 0;
                     }
                 }
-            }
-            (_, Err(_)) => warn!("websocket lock error"),
-            (_,_) => (),
-        };
+                _ => (),
+            };
+        }
+        // if let Ok(bytes_read) = result {
+        //     info!("forwarding {}B from UART to websocket", bytes_read);
+        // }
+        // match (result, websocket_sender.try_lock()) {
+        //     (Ok(bytes_read), Ok(mut socket)) => {
+        //         if let Some(ws) = socket.as_mut() {
+        //             if ws.send(FrameType::Binary(false), &buf[..bytes_read]).is_err() {
+        //                 warn!("Failed to send message");
+        //             }
+        //         }
+        //     }
+        //     (_, Err(_)) => warn!("websocket lock error"),
+        //     (_,_) => (),
+        // };
 
         if led_div_counter >= 10 {
             led_conn.toggle().ok();

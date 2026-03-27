@@ -70,4 +70,6 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
     stm32cubemx
     st::tof::vl53l8cx
     st::cubef7
+    tinycbor
+    m
 )

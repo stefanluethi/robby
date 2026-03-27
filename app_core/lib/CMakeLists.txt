@@ -1,3 +1,5 @@
+include(FetchContent)
+
 add_subdirectory(vl53l8cx)
 
 # STM32CubeF7 Extract for STM32F723E-DISCO board
@@ -50,3 +52,13 @@ target_include_directories(
 target_link_libraries(stm32cubef7 INTERFACE stm32cube7_utils)
 
 add_library(st::cubef7 ALIAS stm32cubef7)
+
+set(WITH_FLOATING_POINT OFF CACHE BOOL "" FORCE)
+set(WITH_CBOR2JSON OFF CACHE BOOL "" FORCE)
+set(WITH_TOOLS OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+        tinycbor
+        GIT_REPOSITORY https://github.com/intel/tinycbor.git
+        GIT_TAG v7.0
+)
+FetchContent_MakeAvailable(tinycbor)

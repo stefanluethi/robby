@@ -32,6 +32,7 @@ egui_extras = "0.33"
 egui_plot = "0.34"
 egui_tiles = "0.14"
 spectrum-analyzer = "1.1"
+hex-string = "0.1.0"
 
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

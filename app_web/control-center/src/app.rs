@@ -88,31 +88,33 @@ impl Views {
                             log::log!(target: "robby", log::Level::Info, "{}", msg);
                         }
                         ewebsock::WsMessage::Binary(msg) => {
-                            let message: proto::Message = serde_cbor_2::from_slice(&msg).unwrap();
-                            match message.payload {
-                                proto::Payload::StreamAnnounce(_) => todo!(),
-                                proto::Payload::StreamFrame(frame) => {
-                                    self.adc_plot.update(
-                                        frame
-                                            .values
-                                            .iter()
-                                            .map(|v| f64::from(*v) as f32)
-                                            .collect::<Vec<f32>>(),
-                                    );
-                                    log::log!(target: "robby", log::Level::Trace, "ws received {} samples", frame.values.len());
-                                }
-                                proto::Payload::Log(_) => todo!(),
-                                proto::Payload::ThreadTable(thread_table) => {
-                                    for thread in thread_table.threads.iter() {
-                                        log::log!(target: "robby", log::Level::Info, "thread info \"{}\" stack usage: {}, cpu usage {}", 
-                                        thread.name, thread.stack_usage, thread.runtime);
+                            log::log!(target: "robby", log::Level::Info, "received message {}", hex_string::HexString::from_bytes(&msg).as_string());
+                            if let Ok(message) = serde_cbor_2::from_slice::<proto::Message>(&msg) {
+                                match message.payload {
+                                    proto::Payload::StreamAnnounce(_) => todo!(),
+                                    proto::Payload::StreamFrame(frame) => {
+                                        self.adc_plot.update(
+                                            frame
+                                                .values
+                                                .iter()
+                                                .map(|v| f64::from(*v) as f32)
+                                                .collect::<Vec<f32>>(),
+                                        );
+                                        log::log!(target: "robby", log::Level::Trace, "ws received {} samples", frame.values.len());
                                     }
-                                    self.task_manager.update(thread_table);
-                                }
-                                proto::Payload::DistanceMap(distances) => {
-                                    self.room_view.update(distances);
-                                },
-                            };
+                                    proto::Payload::Log(_) => todo!(),
+                                    proto::Payload::ThreadTable(thread_table) => {
+                                        for thread in thread_table.threads.iter() {
+                                            log::log!(target: "robby", log::Level::Info, "thread info \"{}\" stack usage: {}, cpu usage {}", 
+                                        thread.name, thread.stack_usage, thread.runtime);
+                                        }
+                                        self.task_manager.update(thread_table);
+                                    }
+                                    proto::Payload::DistanceMap(distances) => {
+                                        self.room_view.update(distances);
+                                    }
+                                };
+                            }
                         }
                         _ => {
                             log::log!(target: "robby", log::Level::Info, "ws unknown message received")

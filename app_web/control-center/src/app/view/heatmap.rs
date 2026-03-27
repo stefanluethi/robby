@@ -41,9 +41,18 @@ impl Viewable for Heatmap {
                             + egui::vec2(rect_size * (x + 1) as f32, rect_size * (y + 1) as f32),
                     },
                     0.0,
-                    super::colormap::map_color(self.distance_map.distances_mm[x][y] as f32 / 4000.0_f32),
+                    map_distance_color(self.distance_map.distances_mm[x][y]),
                 );
             }
         }
+    }
+}
+
+fn map_distance_color(distance: u16) -> egui::Color32 {
+    const MAX_DISTANCE: u16 = 4_000;
+    if distance > MAX_DISTANCE {
+        egui::Color32::BLACK
+    } else {
+        super::colormap::map_color(distance as f32 / MAX_DISTANCE as f32)
     }
 }
