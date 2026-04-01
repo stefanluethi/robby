@@ -34,7 +34,7 @@ impl Viewable for Heatmap {
         for x in 0..size.0 - 1 {
             for y in 0..size.1 - 1 {
                 let distance = self.distance_map.distances_mm[x][y];
-                let color = map_distance_color(distance);
+                let color = map_distance_color(distance).unwrap_or(ui.visuals().panel_fill);
                 let top_left = remainder.left_top() + egui::vec2(rect_size * x as f32, rect_size * y as f32); 
                 let bottom_right = remainder.left_top() + egui::vec2(rect_size * (x + 1) as f32, rect_size * (y + 1) as f32);
                 ui.painter().rect_filled(
@@ -65,11 +65,11 @@ impl Viewable for Heatmap {
     }
 }
 
-fn map_distance_color(distance: u16) -> egui::Color32 {
+fn map_distance_color(distance: u16) -> Option<egui::Color32> {
     const MAX_DISTANCE: u16 = 4_000;
     if distance > MAX_DISTANCE || distance == 0 {
-        egui::Color32::BLACK
+        None
     } else {
-        super::colormap::map_color(distance as f32 / MAX_DISTANCE as f32)
+        Some(super::colormap::map_color(distance as f32 / MAX_DISTANCE as f32))
     }
 }
