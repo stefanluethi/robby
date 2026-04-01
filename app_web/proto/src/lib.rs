@@ -1,22 +1,33 @@
 use serde::{Serialize, Deserialize};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
-pub struct AdcMessage {
-    pub samples: Vec<u16>,
+pub struct StreamDescriptor {
+    pub id: u16,
+    pub name: String,
+    pub scale_factor: f32,
+    pub unit: String,
+    pub sampling_time: f32,
+}
+
+
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+pub struct StreamSyncId {
+    pub id: u16,
+    /// Frame sequence count the sync packet applies to
+    pub sequence: u16,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
-pub struct StreamAnnounce {
-    pub id: u32,
-    pub name: String,
-    pub scale_factor: f32,
-    pub sampling_time: f32,
-    // todo: sync
+pub struct StreamSync {
+    pub time: u64,
+    pub streams: Vec<StreamSyncId>,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct StreamFrameRaw {
-    pub id: u32,
+    pub id: u16,
+    /// Frame packet sequence counter
+    pub sequence: u16,
     pub values: Vec<u32>,
 }
 
@@ -44,7 +55,7 @@ pub struct DistanceMap {
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub enum Payload {
-    StreamAnnounce(StreamAnnounce),
+    StreamDescriptor(StreamDescriptor),
     StreamFrame(StreamFrameRaw),
     Log(LogRecord),
     ThreadTable(ThreadTable),

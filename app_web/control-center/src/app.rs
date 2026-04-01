@@ -91,7 +91,7 @@ impl Views {
                             // log::log!(target: "robby", log::Level::Info, "received message {}", hex_string::HexString::from_bytes(&msg).as_string());
                             if let Ok(message) = serde_cbor_2::from_slice::<proto::Message>(&msg) {
                                 match message.payload {
-                                    proto::Payload::StreamAnnounce(_) => todo!(),
+                                    proto::Payload::StreamDescriptor(_) => todo!(),
                                     proto::Payload::StreamFrame(frame) => {
                                         self.adc_plot.update(
                                             frame
