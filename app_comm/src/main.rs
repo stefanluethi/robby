@@ -98,6 +98,11 @@ fn main() -> anyhow::Result<()> {
                         if let Ok(bytes_read) = result {
                             info!("forwarding {}B from UART to websocket", bytes_read);
                         }
+                        if buf[0] != 0xa1 {
+                            warn!("receiver out of sync, flushing");
+                            uart.flush().ok();
+                            continue;
+                        }
 
                         match (result, websocket_sender.try_lock()) {
                             (Ok(bytes_read), Ok(mut socket)) => {
@@ -120,7 +125,6 @@ fn main() -> anyhow::Result<()> {
                 _ => (),
             };
         };
-        uart.flush();
 
         if led_div_counter >= 10 {
             led_conn.toggle().ok();
