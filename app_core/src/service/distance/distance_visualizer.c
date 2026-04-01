@@ -73,7 +73,7 @@ void DIST_Process(void) {
 
     printf("Ranging starts\n");
     for (int32_t i = 0; i < CONF_N_SENSORS; ++i) {
-        int32_t status = vl53l8cx_start_ranging(&devices[i]);
+        vl53l8cx_start_ranging(&devices[i]);
     }
 
     while (1) {
@@ -88,8 +88,7 @@ void DIST_Process(void) {
         }
 
         for (uint8_t i = 0; i < CONF_N_SENSORS; ++i) {
-            int32_t status =
-                vl53l8cx_get_ranging_data(&devices[i], &results[i]);
+            vl53l8cx_get_ranging_data(&devices[i], &results[i]);
         }
         draw_results();
         size_t length = serialize_distmap(message_buffer, results);
@@ -174,7 +173,11 @@ size_t serialize_distmap(uint8_t* buffer, const VL53L8CX_ResultsData* sensor_res
         for (size_t x = 0; x < 8; ++x) {
             cbor_encoder_create_array(&array_x, &array_y, 8);
             for (size_t y = 0; y < 8; ++y) {
-                int16_t distance = sensor_results[2 - i].distance_mm[x + y * SENSOR_RESOLUTION_X];
+                uint8_t status = sensor_results[2 - i].target_status[x + y * SENSOR_RESOLUTION_X];
+                int16_t distance = -1;
+                if (status == 5U || status == 9U) {
+                    distance = sensor_results[2 - i].distance_mm[x + y * SENSOR_RESOLUTION_X];
+                }
                 cbor_encode_uint(&array_y, distance >= 0 ? distance : UINT16_MAX);
             }
             cbor_encoder_close_container(&array_x, &array_y);

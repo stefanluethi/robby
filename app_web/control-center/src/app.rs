@@ -88,7 +88,7 @@ impl Views {
                             log::log!(target: "robby", log::Level::Info, "{}", msg);
                         }
                         ewebsock::WsMessage::Binary(msg) => {
-                            log::log!(target: "robby", log::Level::Info, "received message {}", hex_string::HexString::from_bytes(&msg).as_string());
+                            // log::log!(target: "robby", log::Level::Info, "received message {}", hex_string::HexString::from_bytes(&msg).as_string());
                             if let Ok(message) = serde_cbor_2::from_slice::<proto::Message>(&msg) {
                                 match message.payload {
                                     proto::Payload::StreamAnnounce(_) => todo!(),
@@ -111,6 +111,7 @@ impl Views {
                                         self.task_manager.update(thread_table);
                                     }
                                     proto::Payload::DistanceMap(distances) => {
+                                        log::log!(target: "robby", log::Level::Info, "distances {:?}", &distances);
                                         self.room_view.update(distances);
                                     }
                                 };
