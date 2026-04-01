@@ -3,6 +3,7 @@
 use core::convert::TryInto;
 
 use embedded_svc::wifi::{self, AuthMethod};
+use esp_idf_hal::io::Write;
 use esp_idf_hal::uart::*;
 
 use esp_idf_svc::hal::peripherals::Peripherals;
@@ -44,7 +45,7 @@ fn main() -> anyhow::Result<()> {
     let config = config::Config::new()
         .baudrate(esp_idf_hal::units::Hertz(1_000_000))
         .rx_fifo_size(2048);
-    let uart = UartDriver::new(
+    let mut uart = UartDriver::new(
         peripherals.uart1,
         tx,
         rx,
@@ -84,7 +85,6 @@ fn main() -> anyhow::Result<()> {
     let mut buf = [0_u8; 1024];
     let mut received_accumulated: usize = 0;
     loop {
-        // let result = uart.read(&mut buf, 2000000);
         while let Some((event, _)) = uart.event_queue().unwrap().recv_front(0) {
             // info!("uart event {:?}", event.payload());
             let evt = event.payload();
@@ -94,7 +94,7 @@ fn main() -> anyhow::Result<()> {
                     if timeout {
                         info!("uart received {}B", received_accumulated);
 
-                        let result = uart.read(&mut buf, 0);
+                        let result = uart.read(&mut buf[..received_accumulated], 0);
                         if let Ok(bytes_read) = result {
                             info!("forwarding {}B from UART to websocket", bytes_read);
                         }
@@ -119,21 +119,8 @@ fn main() -> anyhow::Result<()> {
                 }
                 _ => (),
             };
-        }
-        // if let Ok(bytes_read) = result {
-        //     info!("forwarding {}B from UART to websocket", bytes_read);
-        // }
-        // match (result, websocket_sender.try_lock()) {
-        //     (Ok(bytes_read), Ok(mut socket)) => {
-        //         if let Some(ws) = socket.as_mut() {
-        //             if ws.send(FrameType::Binary(false), &buf[..bytes_read]).is_err() {
-        //                 warn!("Failed to send message");
-        //             }
-        //         }
-        //     }
-        //     (_, Err(_)) => warn!("websocket lock error"),
-        //     (_,_) => (),
-        // };
+        };
+        uart.flush();
 
         if led_div_counter >= 10 {
             led_conn.toggle().ok();
