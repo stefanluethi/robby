@@ -5,6 +5,8 @@
 #include "stm32f7xx_hal_uart.h"
 #include "util/colormap.h"
 
+#include "service/imu/imu.h"
+
 #include <cbor.h>
 #include <stm32f723e_discovery_lcd.h>
 #include <stm32f7xx_hal.h>
@@ -93,6 +95,8 @@ void DIST_Process(void) {
         draw_results();
         size_t length = serialize_distmap(message_buffer, results);
         HAL_UART_Transmit(&huart2, message_buffer, length, HAL_MAX_DELAY);
+
+        IMU_process();
     }
 }
 
