@@ -28,7 +28,7 @@ pub struct StreamFrameRaw {
     pub id: u16,
     /// Frame packet sequence counter
     pub sequence: u16,
-    pub values: Vec<u32>,
+    pub values: Vec<i32>,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]

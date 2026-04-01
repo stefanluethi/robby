@@ -3,7 +3,16 @@
 #include "custom_mems_conf.h"
 #include "lsm6dso.h"
 
+#include <cbor.h>
+#include <stdint.h>
+#include <stm32f7xx_hal.h>
+
+extern UART_HandleTypeDef huart2;
+
 static LSM6DSO_Object_t driver;
+static uint8_t message_buffer[1024];
+
+static size_t serialize_measurement(uint8_t* buffer, int32_t value);
 
 void IMU_init(void)
 {
@@ -36,4 +45,45 @@ void IMU_process(void)
 
     LSM6DSO_ACC_GetAxes(&driver, &accel);
     LSM6DSO_GYRO_GetAxes(&driver, &gyro);
+
+    // todo: move somewhere  sensible
+    size_t length = serialize_measurement(message_buffer, accel.z);
+    HAL_UART_Transmit(&huart2, message_buffer, length, HAL_MAX_DELAY);
+}
+
+size_t serialize_measurement(uint8_t* buffer, int32_t value)
+{
+    CborEncoder encoder;
+    CborEncoder root_map;
+    CborEncoder payload_map;
+    CborEncoder stream_frame_map;
+    CborEncoder values;
+    
+    cbor_encoder_init(&encoder, message_buffer, sizeof(message_buffer), 0);
+    cbor_encoder_create_map(&encoder, &root_map, 1U);
+
+    cbor_encode_text_stringz(&root_map, "payload");
+    cbor_encoder_create_map(&root_map, &payload_map, 1);
+
+    cbor_encode_text_stringz(&payload_map, "StreamFrame");
+    cbor_encoder_create_map(&payload_map, &stream_frame_map, 3);
+    
+    cbor_encode_text_stringz(&stream_frame_map, "id");
+    cbor_encode_uint(&stream_frame_map, 0U);
+    cbor_encode_text_stringz(&stream_frame_map, "sequence");
+    cbor_encode_uint(&stream_frame_map, 0U);
+    cbor_encode_text_stringz(&stream_frame_map, "values");
+    cbor_encoder_create_array(&stream_frame_map, &values, 1U);
+    cbor_encode_int(&values, value);
+
+    cbor_encoder_close_container(&stream_frame_map, &values);
+    cbor_encoder_close_container(&payload_map, &stream_frame_map);
+    cbor_encoder_close_container(&root_map, &payload_map);
+    CborError result = cbor_encoder_close_container(&encoder, &root_map);
+
+    if (result != CborNoError) {
+        return 0U;
+    } else {
+        return cbor_encoder_get_buffer_size(&encoder, buffer);
+    }
 }
