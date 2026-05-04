@@ -21,6 +21,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "app/app.h"
 #include "service/distance/distance_visualizer.h"
 #include "service/imu/imu.h"
 #include "stm32f723e_discovery_lcd.h"
@@ -177,6 +178,8 @@ int main(void)
 
   DIST_Init();
   IMU_init();
+  APP_launch();
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
