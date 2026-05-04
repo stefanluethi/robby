@@ -1,7 +1,9 @@
 include(FetchContent)
 
 add_subdirectory(vl53l8cx)
+add_subdirectory(rtos_cpp)
 
+## STM32CubeF7 #################################################################
 # STM32CubeF7 Extract for STM32F723E-DISCO board
 # https://github.com/STMicroelectronics/STM32CubeF7
 # commit: 4d308aa
@@ -53,6 +55,7 @@ target_link_libraries(stm32cubef7 INTERFACE stm32cube7_utils)
 
 add_library(st::cubef7 ALIAS stm32cubef7)
 
+## tinycbor ####################################################################
 set(WITH_FLOATING_POINT OFF CACHE BOOL "" FORCE)
 set(WITH_CBOR2JSON OFF CACHE BOOL "" FORCE)
 set(WITH_TOOLS OFF CACHE BOOL "" FORCE)
@@ -62,3 +65,65 @@ FetchContent_Declare(
         GIT_TAG v7.0
 )
 FetchContent_MakeAvailable(tinycbor)
+
+## FreeRTOS ####################################################################
+add_library(freertos_config INTERFACE)
+
+target_include_directories(freertos_config SYSTEM
+        INTERFACE
+        ${CMAKE_SOURCE_DIR}/conf/freertos
+        systemview/Config
+        systemview/FreeRTOSV11
+        systemview/SEGGER
+)
+
+target_compile_definitions(freertos_config
+        INTERFACE
+        projCOVERAGE_TEST=0
+)
+
+# target_compile_definitions(freertos_config INTERFACE ${definitions})
+target_compile_options(freertos_config INTERFACE $<$<COMPILE_LANGUAGE:CXX>:-fpermissive>)
+
+set(FREERTOS_HEAP "4" CACHE STRING "" FORCE)
+set(FREERTOS_PORT "GCC_ARM_CM7" CACHE STRING "" FORCE)
+
+FetchContent_Declare(freertos_kernel
+        GIT_REPOSITORY https://github.com/FreeRTOS/FreeRTOS-Kernel.git
+        GIT_TAG        V11.0.1
+)
+
+FetchContent_MakeAvailable(freertos_kernel)
+
+## SystemView ##################################################################
+add_library(segger_systemview STATIC)
+
+target_sources(
+        segger_systemview
+        PRIVATE
+        systemview/FreeRTOSV11/SEGGER_SYSVIEW_FreeRTOS.c
+        systemview/FreeRTOSV11/Config/Cortex-M/SEGGER_SYSVIEW_Config_FreeRTOS.c
+        systemview/SEGGER/SEGGER_RTT.c
+        systemview/SEGGER/SEGGER_RTT_ASM_ARMv7M.S
+        systemview/SEGGER/SEGGER_RTT_printf.c
+        systemview/SEGGER/SEGGER_SYSVIEW.c
+        systemview/SEGGER/Syscalls/SEGGER_RTT_Syscalls_GCC.c
+)
+
+target_include_directories(
+        segger_systemview
+        PUBLIC
+        systemview/SEGGER
+        systemview/FreeRTOSV10
+        PRIVATE
+        systemview/Config
+)
+
+target_link_libraries(
+        segger_systemview
+        PRIVATE
+        freertos_kernel
+)
+
+add_library(segger::systemview ALIAS segger_systemview)
+
