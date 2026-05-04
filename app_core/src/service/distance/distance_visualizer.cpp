@@ -1,6 +1,7 @@
 
 #include "distance_visualizer.h"
 #include "main.h"
+#include "rtos/Task.h"
 #include "stm32f7xx_hal_gpio.h"
 #include "stm32f7xx_hal_uart.h"
 #include "util/colormap.h"
@@ -10,7 +11,10 @@
 #include <cbor.h>
 #include <stm32f723e_discovery_lcd.h>
 #include <stm32f7xx_hal.h>
+
+extern "C" {
 #include <vl53l8cx_api.h>
+}
 
 #include <stddef.h>
 #include <stdbool.h>
@@ -84,7 +88,7 @@ void DIST_Process(void) {
 
             uint32_t conversion_timeout = 500U;
             while (!data_ready && --conversion_timeout) {
-                HAL_Delay(CONF_POLLING_PERIOD);
+                rtos::Task::sleep(CONF_POLLING_PERIOD);
             }
             data_ready = false;
         }
@@ -127,7 +131,7 @@ void draw_results() {
                 } else {
                     int16_t distance = results[sensor].distance_mm[cell];
                     uint16_t color =
-                        map_color_rgb565(((float)distance) / MAX_DISTANCE_MM);
+                        util::map_color_rgb565(((float)distance) / MAX_DISTANCE_MM);
                     BSP_LCD_SetTextColor(color);
                 }
                 BSP_LCD_FillRect(x * 9 + offset_x, y * 9 + offset_y, 9, 9);
@@ -139,16 +143,16 @@ void draw_results() {
 void trigger_sensor(DistanceSensor sensor) {
     switch (sensor) {
     case SENSOR_RIGHT:
-        HAL_GPIO_WritePin(TOF_SYNC1_GPIO_Port, TOF_SYNC1_Pin, 1U);
-        HAL_GPIO_WritePin(TOF_SYNC1_GPIO_Port, TOF_SYNC1_Pin, 0U);
+        HAL_GPIO_WritePin(TOF_SYNC1_GPIO_Port, TOF_SYNC1_Pin, GPIO_PIN_SET);
+        HAL_GPIO_WritePin(TOF_SYNC1_GPIO_Port, TOF_SYNC1_Pin, GPIO_PIN_RESET);
         break;
     case SENSOR_MIDDLE:
-        HAL_GPIO_WritePin(TOF_SYNC2_GPIO_Port, TOF_SYNC2_Pin, 1U);
-        HAL_GPIO_WritePin(TOF_SYNC2_GPIO_Port, TOF_SYNC2_Pin, 0U);
+        HAL_GPIO_WritePin(TOF_SYNC2_GPIO_Port, TOF_SYNC2_Pin, GPIO_PIN_SET);
+        HAL_GPIO_WritePin(TOF_SYNC2_GPIO_Port, TOF_SYNC2_Pin, GPIO_PIN_RESET);
         break;
     case SENSOR_LEFT:
-        HAL_GPIO_WritePin(TOF_SYNC3_GPIO_Port, TOF_SYNC3_Pin, 1U);
-        HAL_GPIO_WritePin(TOF_SYNC3_GPIO_Port, TOF_SYNC3_Pin, 0U);
+        HAL_GPIO_WritePin(TOF_SYNC3_GPIO_Port, TOF_SYNC3_Pin, GPIO_PIN_SET);
+        HAL_GPIO_WritePin(TOF_SYNC3_GPIO_Port, TOF_SYNC3_Pin, GPIO_PIN_RESET);
         break;
     }
 }

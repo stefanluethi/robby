@@ -346,7 +346,7 @@ extern "C" {
  * application writer needs to provide a clock source if set to 1.  Defaults to
  * 0 if left undefined.  See https://www.freertos.org/rtos-run-time-stats.html.
  */
-#define configGENERATE_RUN_TIME_STATS             0
+#define configGENERATE_RUN_TIME_STATS             1
 
 /* Set configUSE_TRACE_FACILITY to include additional task structure members
  * are used by trace and visualisation functions and tools.  Set to 0 to exclude
@@ -366,8 +366,10 @@ extern "C" {
 /* Run time stats gathering configuration options. 
  * In order to use run time stats, you'll need to imeplement this function
  * so that it returns an accurate timer value. */
-extern uint32_t getTimerValue( void );
-#define portGET_RUN_TIME_COUNTER_VALUE() getTimerValue()
+extern void vConfigureTimerForRunTimeStats(void);
+extern uint32_t getRuntimeCount(void);
+#define portCONFIGURE_TIMER_FOR_RUN_TIME_STATS()  vConfigureTimerForRunTimeStats()
+#define portGET_RUN_TIME_COUNTER_VALUE()          getRuntimeCount()
 
 #include "SEGGER_SYSVIEW_FreeRTOS.h"
 

@@ -33,7 +33,7 @@ extern "C" {
 
 /* USER CODE END 1 */
 
-#define USE_CUSTOM_MOTION_SENSOR_LSM6DSO_0        1U
+#define USE_CUSTOM_MOTION_SENSOR_LSM6DSO_0        0U
 
 #define CUSTOM_LSM6DSO_0_I2C_Init BSP_I2C2_Init
 #define CUSTOM_LSM6DSO_0_I2C_DeInit BSP_I2C2_DeInit

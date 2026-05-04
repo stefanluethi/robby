@@ -1,14 +1,7 @@
 #pragma once
 
-#ifdef __cplusplus
-extern "C" {
-#endif 
+#include <cstdint>
 
-#include <stdint.h>
-
-extern uint16_t map_color_rgb565(float input);
-
-
-#ifdef __cplusplus
+namespace util {
+uint16_t map_color_rgb565(float input);
 }
-#endif 

@@ -6,6 +6,8 @@
 #include <stdint.h>
 #include <math.h>
 
+namespace util {
+
 float clamp(float v)
 {
   const float t = v < 0.0F ? 0.0F : v;
@@ -21,4 +23,6 @@ uint16_t map_color_rgb565(float input)
     uint16_t blue  = clamp(1.5 - fabsf(2.0 * t + 1.0)) * 31;
 
     return red << 11 | green << 5 | blue;
+}
+
 }

@@ -176,8 +176,6 @@ int main(void)
   BSP_LCD_InitEx(LCD_ORIENTATION_LANDSCAPE_ROT180);
   BSP_LCD_Clear(LCD_COLOR_BLACK);
 
-  DIST_Init();
-  IMU_init();
   APP_launch();
 
   /* USER CODE END 2 */
@@ -186,7 +184,6 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    DIST_Process();
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -1484,6 +1481,21 @@ int __io_putchar(int ch)
   HAL_UART_Transmit(&huart6, (uint8_t *)&ch, 1, 0xFFFF);
 
   return ch;
+}
+
+void vConfigureTimerForRunTimeStats(void)
+{
+    /* Enable DWT */
+    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+
+    /* Reset and enable cycle counter */
+    DWT->CYCCNT  = 0UL;
+    DWT->CTRL   |= DWT_CTRL_CYCCNTENA_Msk;
+}
+
+extern uint32_t getRuntimeCount(void)
+{
+  return DWT->CYCCNT;
 }
 
 /* USER CODE END 4 */
