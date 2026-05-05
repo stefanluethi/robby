@@ -1,20 +1,20 @@
 /* USER CODE BEGIN Header */
 /**
-  ******************************************************************************
-  * @file    stm32f7xx_it.c
-  * @brief   Interrupt Service Routines.
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2025 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
+ ******************************************************************************
+ * @file    stm32f7xx_it.c
+ * @brief   Interrupt Service Routines.
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2025 STMicroelectronics.
+ * All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
 /* USER CODE END Header */
 
 /* Includes ------------------------------------------------------------------*/
@@ -23,6 +23,8 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "service/distance/distance_visualizer.h"
+#include "service/command_handler/command_handler_glue.h"
+#include <string.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -42,7 +44,9 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
-
+#define UART2_RX_BLOCK_SIZE 128
+uint8_t dma_rx_buffer[2][UART2_RX_BLOCK_SIZE];
+uint8_t current_dma_buffer = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -56,6 +60,8 @@
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
+extern DMA_HandleTypeDef hdma_usart2_rx;
+extern UART_HandleTypeDef huart2;
 extern HCD_HandleTypeDef hhcd_USB_OTG_FS;
 extern HCD_HandleTypeDef hhcd_USB_OTG_HS;
 extern TIM_HandleTypeDef htim1;
@@ -76,9 +82,8 @@ void NMI_Handler(void)
 
   /* USER CODE END NonMaskableInt_IRQn 0 */
   /* USER CODE BEGIN NonMaskableInt_IRQn 1 */
-   while (1)
-  {
-  }
+    while (1) {
+    }
   /* USER CODE END NonMaskableInt_IRQn 1 */
 }
 
@@ -163,6 +168,20 @@ void DebugMon_Handler(void)
 /******************************************************************************/
 
 /**
+  * @brief This function handles DMA1 stream5 global interrupt.
+  */
+void DMA1_Stream5_IRQHandler(void)
+{
+  /* USER CODE BEGIN DMA1_Stream5_IRQn 0 */
+
+  /* USER CODE END DMA1_Stream5_IRQn 0 */
+  HAL_DMA_IRQHandler(&hdma_usart2_rx);
+  /* USER CODE BEGIN DMA1_Stream5_IRQn 1 */
+
+  /* USER CODE END DMA1_Stream5_IRQn 1 */
+}
+
+/**
   * @brief This function handles TIM1 update interrupt and TIM10 global interrupt.
   */
 void TIM1_UP_TIM10_IRQHandler(void)
@@ -174,6 +193,39 @@ void TIM1_UP_TIM10_IRQHandler(void)
   /* USER CODE BEGIN TIM1_UP_TIM10_IRQn 1 */
 
   /* USER CODE END TIM1_UP_TIM10_IRQn 1 */
+}
+
+/**
+  * @brief This function handles USART2 global interrupt.
+  */
+void USART2_IRQHandler(void)
+{
+  /* USER CODE BEGIN USART2_IRQn 0 */
+    if (__HAL_UART_GET_FLAG(&huart2, UART_FLAG_IDLE)) {
+        __HAL_UART_CLEAR_IDLEFLAG(&huart2);
+
+        // Stop DMA to safely process data
+        HAL_UART_DMAStop(&huart2);
+
+        // Calculate received length
+        uint32_t length =
+            UART2_RX_BLOCK_SIZE - __HAL_DMA_GET_COUNTER(huart2.hdmarx);
+
+        // Swap buffer
+        current_dma_buffer = 1 - current_dma_buffer;
+
+        // Restart DMA with the newly swapped buffer
+        HAL_UART_Receive_DMA(&huart2, dma_rx_buffer[current_dma_buffer],
+                             UART2_RX_BLOCK_SIZE);
+
+        // Copy data to local buffer
+        CMD_DataReceivedCallback(dma_rx_buffer[1 - current_dma_buffer], length);
+    }
+  /* USER CODE END USART2_IRQn 0 */
+  HAL_UART_IRQHandler(&huart2);
+  /* USER CODE BEGIN USART2_IRQn 1 */
+
+  /* USER CODE END USART2_IRQn 1 */
 }
 
 /**
@@ -222,10 +274,18 @@ void OTG_HS_IRQHandler(void)
 }
 
 /* USER CODE BEGIN 1 */
+void UART2_Start_RX_DMA(void) {
+    // Start DMA reception into the current buffer
+    HAL_UART_Receive_DMA(&huart2, dma_rx_buffer[current_dma_buffer],
+                         UART2_RX_BLOCK_SIZE);
+
+    // Enable UART IDLE line interrupt
+    __HAL_UART_ENABLE_IT(&huart2, UART_IT_IDLE);
+}
+
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
-  if (GPIO_Pin == TOF_INT_Pin)
-  {
-    DIST_ConversionDoneCallback();
-  }
+    if (GPIO_Pin == TOF_INT_Pin) {
+        DIST_ConversionDoneCallback();
+    }
 }
 /* USER CODE END 1 */
