@@ -56,6 +56,7 @@ target_link_libraries(stm32cubef7 INTERFACE stm32cube7_utils)
 add_library(st::cubef7 ALIAS stm32cubef7)
 
 ## tinycbor ####################################################################
+
 set(WITH_FLOATING_POINT OFF CACHE BOOL "" FORCE)
 set(WITH_CBOR2JSON OFF CACHE BOOL "" FORCE)
 set(WITH_TOOLS OFF CACHE BOOL "" FORCE)
@@ -66,12 +67,23 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(tinycbor)
 
+## se-oss ######################################################################
+
+set(SE_OSS_COMPONENT_LOG ON CACHE BOOL "" FORCE)
+set(SE_OSS_LOG_SUPPORT_CBOR ON CACHE BOOL "" FORCE)
+FetchContent_Declare(
+        se-oss
+        GIT_REPOSITORY https://github.com/sourceengineers/se-oss.git
+        GIT_TAG        d4ecb62ffa0278873240ca04d0dd3cc20436f5e7
+)
+FetchContent_MakeAvailable(se-oss)
+
 ## FreeRTOS ####################################################################
 add_library(freertos_config INTERFACE)
 
 target_include_directories(freertos_config SYSTEM
         INTERFACE
-        ${CMAKE_SOURCE_DIR}/conf/freertos
+        ${CMAKE_SOURCE_DIR}/src/conf/freertos
         systemview/Config
         systemview/FreeRTOSV11
         systemview/SEGGER

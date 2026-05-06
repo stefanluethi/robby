@@ -132,6 +132,14 @@ impl Views {
         }
     }
 
+    fn websocket_send(&mut self, command: proto::Command) {
+        if let Some(sender) = self.ws_sender.as_mut() {
+            let command_packet = serde_cbor_2::to_vec(&command).unwrap();
+            log::log!(target: "robby", log::Level::Info, "send command {}", hex_string::HexString::from_bytes(&command_packet).as_string());
+            sender.send(ewebsock::WsMessage::Binary(command_packet));
+        }
+    }
+
     fn settings_ui(&mut self, ui: &mut egui::Ui) {
         ui.heading("robby control center");
 
@@ -272,6 +280,9 @@ impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.state.websocket_receive();
 
+        // todo: find viable solution!!!
+        let old_value = self.state.task_manager.value();
+
         egui::TopBottomPanel::top("top panel").show(ctx, |ui| {
             ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
                 self.state.settings_ui(ui);
@@ -288,6 +299,12 @@ impl eframe::App for App {
         egui::CentralPanel::default().show(ctx, |ui| {
             self.tree.ui(&mut self.state, ui);
         });
+
+        let new_value = self.state.task_manager.value();
+        if new_value != old_value  {
+            self.state.websocket_send(proto::Command::SetMotorSpeed((new_value * 10.0_f32) as u16));
+        }
+
     }
 }
 

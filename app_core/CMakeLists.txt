@@ -39,6 +39,8 @@ add_subdirectory(lib)
 
 # Add STM32CubeMX generated sources
 add_subdirectory(cmake/stm32cubemx)
+# remove conflicting DEBUG symbol again
+target_compile_options(stm32cubemx INTERFACE -UDEBUG)
 
 # Link directories setup
 target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
@@ -80,4 +82,5 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
     freertos_kernel
     segger::systemview
     rtos_cpp
+    se_oss::log
 )

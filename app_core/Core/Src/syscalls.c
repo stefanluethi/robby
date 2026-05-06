@@ -21,6 +21,8 @@
  */
 
 /* Includes */
+#include "stm32f7xx_hal.h"
+
 #include <sys/stat.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -173,6 +175,16 @@ int _execve(char *name, char **argv, char **env)
   (void)env;
   errno = ENOMEM;
   return -1;
+}
+
+int _gettimeofday(struct timeval *tv, void *tz)
+{
+    if (tv) {
+        uint32_t ticks = HAL_GetTick();
+        tv->tv_sec  = ticks / 1000;
+        tv->tv_usec = ticks * 1000;
+    }
+    return 0;
 }
 
 // --- Picolibc Specific Section ---

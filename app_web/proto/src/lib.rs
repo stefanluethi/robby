@@ -66,3 +66,9 @@ pub enum Payload {
 pub struct Message {
     pub payload: Payload,
 }
+
+
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+pub enum Command {
+    SetMotorSpeed(u16),
+}
