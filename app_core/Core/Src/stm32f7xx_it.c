@@ -22,8 +22,8 @@
 #include "stm32f7xx_it.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "service/distance/distance_visualizer.h"
-#include "service/command_handler/command_handler_glue.h"
+#include "service/distance_visualizer.h"
+#include "glue/araldite.h"
 #include <string.h>
 /* USER CODE END Includes */
 
@@ -218,8 +218,7 @@ void USART2_IRQHandler(void)
         HAL_UART_Receive_DMA(&huart2, dma_rx_buffer[current_dma_buffer],
                              UART2_RX_BLOCK_SIZE);
 
-        // Copy data to local buffer
-        CMD_DataReceivedCallback(dma_rx_buffer[1 - current_dma_buffer], length);
+        RESIN_DataReceivedCallback(dma_rx_buffer[1 - current_dma_buffer], length);
     }
   /* USER CODE END USART2_IRQn 0 */
   HAL_UART_IRQHandler(&huart2);

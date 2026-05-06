@@ -1,11 +1,10 @@
 #pragma once
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+namespace robby {
 
-void APP_launch(void);
+class App {
+public:
+    [[noreturn]] void launch();
+};
 
-#ifdef __cplusplus
 }
-#endif

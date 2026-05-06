@@ -6,7 +6,7 @@
 #include "stm32f7xx_hal_uart.h"
 #include "util/colormap.h"
 
-#include "service/imu/imu.h"
+#include "service/imu.h"
 
 #include <cbor.h>
 #include <stm32f723e_discovery_lcd.h>

@@ -21,10 +21,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "app/app.h"
-#include "driver/fuelgauge/fuelgauge.h"
-#include "service/distance/distance_visualizer.h"
-#include "service/imu/imu.h"
+#include "driver/fuelgauge.h"
+#include "glue/araldite.h"
 #include "stm32f723e_disco_bus.h"
 #include "stm32f723e_discovery_lcd.h"
 #include "stm32f7xx_hal_def.h"
@@ -190,7 +188,7 @@ int main(void) {
     // res = fuelgauge_get_soc(&soc);
 
     UART2_Start_RX_DMA();
-    APP_launch();
+    RESIN_launch_app();
 
     /* USER CODE END 2 */
 

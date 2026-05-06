@@ -48,11 +48,12 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     src/app/app.cpp
-    src/driver/fuelgauge/fuelgauge.c
-    src/service/distance/distance_visualizer.cpp
-    src/service/distance/tof_platform.c
-    src/service/imu/imu.cpp
-    src/service/command_handler/command_handler.cpp
+    src/driver/fuelgauge.c
+    src/glue/araldite.cpp
+    src/service/distance_visualizer.cpp
+    src/service/tof_platform.c
+    src/service/imu.cpp
+    src/service/command_handler.cpp
     src/util/colormap.cpp
 )
 
