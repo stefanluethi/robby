@@ -59,8 +59,8 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
-#define ARD_D7_GPIO_Pin GPIO_PIN_3
-#define ARD_D7_GPIO_GPIO_Port GPIOE
+#define MOT_EN_1_Pin GPIO_PIN_3
+#define MOT_EN_1_GPIO_Port GPIOE
 #define QSPI_D2_Pin GPIO_PIN_2
 #define QSPI_D2_GPIO_Port GPIOE
 #define PSRAM_NBL1_Pin GPIO_PIN_1
@@ -85,12 +85,12 @@ void Error_Handler(void);
 #define UART_TXD_WIFI_RX_GPIO_Port GPIOC
 #define TOF_SYNC3_Pin GPIO_PIN_15
 #define TOF_SYNC3_GPIO_Port GPIOA
-#define ARD_D8_GPIO_Pin GPIO_PIN_4
-#define ARD_D8_GPIO_GPIO_Port GPIOE
-#define ARD_D3_TIM9_CH1_Pin GPIO_PIN_5
-#define ARD_D3_TIM9_CH1_GPIO_Port GPIOE
-#define ARD_D6_TIM9_CH2_Pin GPIO_PIN_6
-#define ARD_D6_TIM9_CH2_GPIO_Port GPIOE
+#define MOT_EN_2_Pin GPIO_PIN_4
+#define MOT_EN_2_GPIO_Port GPIOE
+#define MOT_PWM_1_Pin GPIO_PIN_5
+#define MOT_PWM_1_GPIO_Port GPIOE
+#define MOT_PWM_2_Pin GPIO_PIN_6
+#define MOT_PWM_2_GPIO_Port GPIOE
 #define SAI2_I2C1_SDA_Pin GPIO_PIN_9
 #define SAI2_I2C1_SDA_GPIO_Port GPIOB
 #define NC1_Pin GPIO_PIN_7
@@ -159,8 +159,8 @@ void Error_Handler(void);
 #define QSPI_D0_GPIO_Port GPIOC
 #define CTP_SCL_Pin GPIO_PIN_8
 #define CTP_SCL_GPIO_Port GPIOA
-#define ARD_D4_GPIO_Pin GPIO_PIN_3
-#define ARD_D4_GPIO_GPIO_Port GPIOH
+#define MOT_SLEEP_Pin GPIO_PIN_3
+#define MOT_SLEEP_GPIO_Port GPIOH
 #define LCD_TE_INT_Pin GPIO_PIN_8
 #define LCD_TE_INT_GPIO_Port GPIOC
 #define VCP_RX_Pin GPIO_PIN_7
