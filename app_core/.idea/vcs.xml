@@ -3,6 +3,8 @@
   <component name="VcsDirectoryMappings">
     <mapping directory="$PROJECT_DIR$/.." vcs="Git" />
     <mapping directory="$PROJECT_DIR$/build/Debug/_deps/freertos_kernel-src" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/build/Debug/_deps/freertos_kernel-src/portable/ThirdParty/Community-Supported-Ports" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/build/Debug/_deps/freertos_kernel-src/portable/ThirdParty/Partner-Supported-Ports" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/build/Debug/_deps/se-oss-src" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/build/Debug/_deps/tinycbor-src" vcs="Git" />
   </component>
