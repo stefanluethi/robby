@@ -139,3 +139,14 @@ target_link_libraries(
 
 add_library(segger::systemview ALIAS segger_systemview)
 
+## nanocobs ####################################################################
+
+FetchContent_Declare(
+        nanocobs
+        GIT_REPOSITORY https://github.com/charlesnicholson/nanocobs.git
+        GIT_TAG        v0.2.0
+)
+FetchContent_MakeAvailable(nanocobs)
+
+add_library(nanocobs STATIC ${nanocobs_SOURCE_DIR}/cobs.c)
+target_include_directories(nanocobs PUBLIC ${nanocobs_SOURCE_DIR})

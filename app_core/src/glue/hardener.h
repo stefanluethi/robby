@@ -21,4 +21,21 @@ private:
     std::function<void(TArgs...)> _callback {};
 };
 
+template<>
+class Hardener<> {
+public:
+    void register_callback(std::function<void()> callback) {
+        _callback = std::move(callback);
+    }
+
+    void call() {
+        if (_callback) {
+            return _callback();
+        }
+    }
+
+private:
+    std::function<void()> _callback {};
+};
+
 }

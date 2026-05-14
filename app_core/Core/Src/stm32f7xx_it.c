@@ -22,7 +22,6 @@
 #include "stm32f7xx_it.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "service/distance_visualizer.h"
 #include "glue/araldite.h"
 #include <string.h>
 /* USER CODE END Includes */
@@ -284,7 +283,7 @@ void UART2_Start_RX_DMA(void) {
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
     if (GPIO_Pin == TOF_INT_Pin) {
-        DIST_ConversionDoneCallback();
+        RESIN_DistanceConversionDoneCallback();
     }
 }
 /* USER CODE END 1 */

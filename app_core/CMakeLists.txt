@@ -18,9 +18,9 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 
 # Define the build type
-if(NOT CMAKE_BUILD_TYPE)
+if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Debug")
-endif()
+endif ()
 
 # Enable compile command to ease indexing with e.g. clangd
 set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
@@ -44,29 +44,32 @@ target_compile_options(stm32cubemx INTERFACE -UDEBUG)
 
 # Link directories setup
 target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
-    # Add user defined library search paths
+        # Add user defined library search paths
 )
 
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
-    src/app/app.cpp
-    src/driver/fuelgauge.c
-    src/glue/araldite.cpp
-    src/service/distance_visualizer.cpp
-    src/service/tof_platform.c
-    src/service/imu.cpp
-    src/service/command_handler.cpp
-    src/util/colormap.cpp
+        src/app/app.cpp
+        src/driver/fuelgauge.c
+        src/driver/serial_driver.cpp
+        src/glue/araldite.cpp
+        src/service/distance_visualizer.cpp
+        src/service/tof_platform.c
+        src/service/imu.cpp
+        src/service/data_publisher.cpp
+        src/service/command_handler.cpp
+        src/util/colormap.cpp
 )
+
 
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
-    src
+        src
 )
 
 # Add project symbols (macros)
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
-    # Add user defined symbols
+        # Add user defined symbols
 )
 
 # Remove wrong libob.a library dependency when using cpp files
@@ -74,13 +77,14 @@ list(REMOVE_ITEM CMAKE_C_IMPLICIT_LINK_LIBRARIES ob)
 
 # Add linked libraries
 target_link_libraries(${CMAKE_PROJECT_NAME}
-    stm32cubemx
-    st::tof::vl53l8cx
-    st::cubef7
-    tinycbor
-    m
-    freertos_kernel
-    segger::systemview
-    rtos_cpp
-    se_oss::log
+        stm32cubemx
+        st::tof::vl53l8cx
+        st::cubef7
+        tinycbor
+        m
+        freertos_kernel
+        segger::systemview
+        rtos_cpp
+        se_oss::log
+        nanocobs
 )

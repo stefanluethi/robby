@@ -36,6 +36,11 @@ void App::launch()
         command_handler->data_received_callback(data, length);
     });
 
+    auto distance_visualizer = std::make_unique<DistanceVisualizer>(log_registry->createLogger(LogContextId::SPACE_ACQUISITION));
+    g_distanceConversionDone.register_callback([&]() {
+        distance_visualizer->conversion_done_callback();
+    });
+
     auto command_thread = rtos::Task::build()
         .name("command")
         .stackSize(2048)
@@ -51,12 +56,13 @@ void App::launch()
         .name("one")
         .stackSize(10 * 1024)
         .priority(4)
-        .spawn([](){
-            DIST_Init();
-            IMU_init();
+        .spawn([&](){
+            distance_visualizer->start();
+            Imu imu {};
 
             while (true) {
-                DIST_Process();
+                distance_visualizer->process();
+                imu.process();
             }
         });
 
