@@ -44,8 +44,7 @@
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
 #define UART2_RX_BLOCK_SIZE 128
-uint8_t dma_rx_buffer[2][UART2_RX_BLOCK_SIZE];
-uint8_t current_dma_buffer = 0;
+uint8_t dma_rx_buffer[UART2_RX_BLOCK_SIZE];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -200,25 +199,6 @@ void TIM1_UP_TIM10_IRQHandler(void)
 void USART2_IRQHandler(void)
 {
   /* USER CODE BEGIN USART2_IRQn 0 */
-    if (__HAL_UART_GET_FLAG(&huart2, UART_FLAG_IDLE)) {
-        __HAL_UART_CLEAR_IDLEFLAG(&huart2);
-
-        // Stop DMA to safely process data
-        HAL_UART_DMAStop(&huart2);
-
-        // Calculate received length
-        uint32_t length =
-            UART2_RX_BLOCK_SIZE - __HAL_DMA_GET_COUNTER(huart2.hdmarx);
-
-        // Swap buffer
-        current_dma_buffer = 1 - current_dma_buffer;
-
-        // Restart DMA with the newly swapped buffer
-        HAL_UART_Receive_DMA(&huart2, dma_rx_buffer[current_dma_buffer],
-                             UART2_RX_BLOCK_SIZE);
-
-        RESIN_DataReceivedCallback(dma_rx_buffer[1 - current_dma_buffer], length);
-    }
   /* USER CODE END USART2_IRQn 0 */
   HAL_UART_IRQHandler(&huart2);
   /* USER CODE BEGIN USART2_IRQn 1 */
@@ -274,11 +254,23 @@ void OTG_HS_IRQHandler(void)
 /* USER CODE BEGIN 1 */
 void UART2_Start_RX_DMA(void) {
     // Start DMA reception into the current buffer
-    HAL_UART_Receive_DMA(&huart2, dma_rx_buffer[current_dma_buffer],
-                         UART2_RX_BLOCK_SIZE);
+    HAL_UARTEx_ReceiveToIdle_DMA(&huart2, dma_rx_buffer,
+                                 UART2_RX_BLOCK_SIZE);
+}
 
-    // Enable UART IDLE line interrupt
-    __HAL_UART_ENABLE_IT(&huart2, UART_IT_IDLE);
+void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t size)
+{
+    if (huart == &huart2) {
+        RESIN_DataReceivedCallback(dma_rx_buffer, size);
+        UART2_Start_RX_DMA();
+    }
+}
+
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
+{
+    if (huart == &huart2) {
+        UART2_Start_RX_DMA();
+    }
 }
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
