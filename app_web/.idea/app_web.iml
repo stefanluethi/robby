@@ -4,9 +4,11 @@
     <content url="file://$MODULE_DIR$">
       <sourceFolder url="file://$MODULE_DIR$/control-center/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/proto/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/serial-bridge/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/simulator/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/control-center/target" />
       <excludeFolder url="file://$MODULE_DIR$/proto/target" />
+      <excludeFolder url="file://$MODULE_DIR$/serial-bridge/target" />
       <excludeFolder url="file://$MODULE_DIR$/simulator/target" />
     </content>
     <orderEntry type="inheritedJdk" />
