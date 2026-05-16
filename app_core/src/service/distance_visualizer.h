@@ -5,14 +5,28 @@
 #include <cstddef>
 #include <cstdint>
 #include <utility>
+#include <array>
+
+#include <rtos/rtos.h>
 
 extern "C" {
 #include <vl53l8cx_api.h>
 }
 
+namespace robby {
+
+using DistanceSensorImage = std::array<std::array<int16_t, 8>, 8>;
+struct DistanceMap
+{
+    std::array<DistanceSensorImage, 3> sensors {};
+
+    rtos::Semaphore updated {};
+    rtos::Mutex lock {};
+};
+
 class DistanceVisualizer {
 public:
-    explicit DistanceVisualizer(se_oss::Logger log) : _log {std::move(log)} {}
+    explicit DistanceVisualizer(se_oss::Logger log, DistanceMap& distance_map) : _log {std::move(log)}, _distance_map {distance_map} {}
     void start();
     void process();
     void conversion_done_callback();
@@ -42,6 +56,7 @@ private:
     VL53L8CX_Configuration _devices[CONF_N_SENSORS]{};
     VL53L8CX_ResultsData _results[CONF_N_SENSORS]{};
     bool _data_ready = false;
-    uint8_t _message_buffer[1024]{};
     se_oss::Logger _log;
+    DistanceMap& _distance_map;
 };
+}

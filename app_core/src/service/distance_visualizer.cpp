@@ -8,11 +8,9 @@
 
 #include "service/imu.h"
 
-#include <cbor.h>
 #include <stm32f723e_discovery_lcd.h>
 #include <stm32f7xx_hal.h>
 
-#include <cstdint>
 #include <cstdio>
 
 extern "C" {
@@ -37,6 +35,8 @@ typedef enum {
     SENSOR_MIDDLE = 1U,
     SENSOR_LEFT = 2U,
 } DistanceSensor;
+
+using namespace robby;
 
 void DistanceVisualizer::start()
 {
@@ -84,10 +84,27 @@ void DistanceVisualizer::process()
         vl53l8cx_get_ranging_data(&_devices[i], &_results[i]);
     }
 
-    draw_results();
+    // draw_results();
 
-    size_t length = serialize_distmap(_message_buffer, _results);
-    HAL_UART_Transmit(&huart2, _message_buffer, length, HAL_MAX_DELAY);
+    // Update resolut store
+    _distance_map.lock.lock();
+    for (size_t i = 0; i < CONF_N_SENSORS; ++i) {
+        for (size_t x = 0; x < SENSOR_RESOLUTION_X; ++x) {
+            for (size_t y = 0; y < SENSOR_RESOLUTION_Y; ++y) {
+                size_t sensor_index = CONF_N_SENSORS - 1U - i;
+                size_t cell = x + y * SENSOR_RESOLUTION_X;
+
+                uint8_t status = _results[sensor_index].target_status[cell];
+                int16_t distance = -1;
+                if (status == 5U || status == 9U) {
+                    distance = _results[sensor_index].distance_mm[cell];
+                }
+                _distance_map.sensors[sensor_index][x][y] = distance;
+            }
+        }
+    }
+    _distance_map.lock.unlock();
+    _distance_map.updated.release();
 }
 
 void DistanceVisualizer::conversion_done_callback()
@@ -151,61 +168,4 @@ void DistanceVisualizer::trigger_sensor(DistanceSensor sensor)
         HAL_GPIO_WritePin(TOF_SYNC3_GPIO_Port, TOF_SYNC3_Pin, GPIO_PIN_RESET);
         break;
     }
-}
-
-size_t DistanceVisualizer::serialize_distmap(
-    uint8_t* buffer,
-    const VL53L8CX_ResultsData* sensor_results)
-{
-    CborEncoder encoder;
-    CborEncoder root_map;
-    CborEncoder payload_map;
-    CborEncoder distance_map;
-    CborEncoder array_x;
-    CborEncoder array_y;
-
-    cbor_encoder_init(&encoder, buffer, sizeof(_message_buffer), 0);
-    cbor_encoder_create_map(&encoder, &root_map, 1U);
-
-    cbor_encode_text_stringz(&root_map, "payload");
-    cbor_encoder_create_map(&root_map, &payload_map, 1U);
-
-    cbor_encode_text_stringz(&payload_map, "DistanceMap");
-    cbor_encoder_create_map(&payload_map, &distance_map, 1U);
-
-    cbor_encode_text_stringz(&distance_map, "distances_mm");
-    cbor_encoder_create_array(&distance_map, &array_x, CONF_N_SENSORS * SENSOR_RESOLUTION_X);
-
-    for (size_t i = 0; i < CONF_N_SENSORS; ++i) {
-        for (size_t x = 0; x < SENSOR_RESOLUTION_X; ++x) {
-            cbor_encoder_create_array(&array_x, &array_y, SENSOR_RESOLUTION_Y);
-
-            for (size_t y = 0; y < SENSOR_RESOLUTION_Y; ++y) {
-                size_t sensor_index = CONF_N_SENSORS - 1U - i;
-                size_t cell = x + y * SENSOR_RESOLUTION_X;
-
-                uint8_t status = sensor_results[sensor_index].target_status[cell];
-                int16_t distance = -1;
-
-                if (status == 5U || status == 9U) {
-                    distance = sensor_results[sensor_index].distance_mm[cell];
-                }
-
-                cbor_encode_uint(&array_y, distance >= 0 ? distance : UINT16_MAX);
-            }
-
-            cbor_encoder_close_container(&array_x, &array_y);
-        }
-    }
-
-    cbor_encoder_close_container(&distance_map, &array_x);
-    cbor_encoder_close_container(&payload_map, &distance_map);
-    cbor_encoder_close_container(&root_map, &payload_map);
-    CborError result = cbor_encoder_close_container(&encoder, &root_map);
-
-    if (result != CborNoError) {
-        return 0U;
-    }
-
-    return cbor_encoder_get_buffer_size(&encoder, buffer);
 }

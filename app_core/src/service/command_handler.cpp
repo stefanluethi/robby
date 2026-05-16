@@ -19,13 +19,13 @@ CommandHandler::CommandHandler(se_oss::Logger log) :
 }
 
 void CommandHandler::data_received_callback(void* data, std::size_t length)
-{ 
+{
     if (data == nullptr || length == 0 || length > MAX_MESSAGE_LENGTH - 1) {
         return;
     }
 
     _message_buffer_irq[0] = static_cast<uint8_t>(length);
-    std::memcpy(_message_buffer_irq.begin() + 1, static_cast<uint8_t*>(data), length);
+    std::memcpy(_message_buffer_irq + 1, data, length);
     _queue.send(_message_buffer_irq);
 }
 
@@ -33,7 +33,6 @@ void CommandHandler::process()
 {
     _queue.receive(_message_buffer_proc);
     try_parse_motor_command(&_message_buffer_proc[1], _message_buffer_proc[0]);
-    //LOG_DEBUG(_log, "received %u bytes with message %s", _message_buffer_irq[0], &_message_buffer_irq[1]);
 }
 
 
@@ -79,11 +78,8 @@ bool CommandHandler::try_parse_motor_command(const uint8_t* message_raw, std::si
             return false;
         }
 
-        /* --- Read the float value --- */
-        /* F9 = half-precision (CborHalfFloatType).
-           cbor_value_get_float() promotes it to a full C float. */
         if (!cbor_value_is_unsigned_integer(&val)) {
-            LOG_WARN(_log, "Expected a float value for key '%s'", key_buf);
+            LOG_WARN(_log, "Expected a uint value for key '%s'", key_buf);
             return false;
         }
 

@@ -2,17 +2,38 @@
 
 #include "lsm6dso.h"
 
+#include <rtos/rtos.h>
+
 #include <cstddef>
 #include <cstdint>
 
+namespace robby {
+
+struct Acceleration
+{
+    int16_t x;
+    int16_t y;
+    int16_t z;
+};
+
+using AccelerationFrame = std::array<Acceleration, 100>;
+
 class Imu {
 public:
-    Imu();
+    Imu(rtos::MessageQueue<AccelerationFrame>& frames);
+    void start();
     void process();
 
 private:
-    size_t serialize_measurement(uint8_t* buffer, int32_t value);
+    typedef union {
+        int16_t i16bit[3];
+        uint8_t u8bit[6];
+    } axis3bit16_t;
 
-    LSM6DSO_Object_t _driver{};
-    uint8_t _message_buffer_[1024]{};
+
+    LSM6DSO_Object_t _driver {};
+    AccelerationFrame _acceleration_frame {};
+    rtos::MessageQueue<AccelerationFrame>& _frames;
 };
+
+}

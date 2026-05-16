@@ -23,7 +23,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "glue/araldite.h"
-#include <string.h>
+#include "main.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -45,11 +45,13 @@
 /* USER CODE BEGIN PV */
 #define UART2_RX_BLOCK_SIZE 128
 uint8_t dma_rx_buffer[UART2_RX_BLOCK_SIZE];
+
+extern TIM_HandleTypeDef htim9;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN PFP */
-
+void safeShutdown(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -77,7 +79,7 @@ extern TIM_HandleTypeDef htim1;
 void NMI_Handler(void)
 {
   /* USER CODE BEGIN NonMaskableInt_IRQn 0 */
-
+    safeShutdown();
   /* USER CODE END NonMaskableInt_IRQn 0 */
   /* USER CODE BEGIN NonMaskableInt_IRQn 1 */
     while (1) {
@@ -91,7 +93,7 @@ void NMI_Handler(void)
 void HardFault_Handler(void)
 {
   /* USER CODE BEGIN HardFault_IRQn 0 */
-
+    safeShutdown();
   /* USER CODE END HardFault_IRQn 0 */
   while (1)
   {
@@ -106,7 +108,7 @@ void HardFault_Handler(void)
 void MemManage_Handler(void)
 {
   /* USER CODE BEGIN MemoryManagement_IRQn 0 */
-
+    safeShutdown();
   /* USER CODE END MemoryManagement_IRQn 0 */
   while (1)
   {
@@ -121,7 +123,7 @@ void MemManage_Handler(void)
 void BusFault_Handler(void)
 {
   /* USER CODE BEGIN BusFault_IRQn 0 */
-
+    safeShutdown();
   /* USER CODE END BusFault_IRQn 0 */
   while (1)
   {
@@ -136,7 +138,7 @@ void BusFault_Handler(void)
 void UsageFault_Handler(void)
 {
   /* USER CODE BEGIN UsageFault_IRQn 0 */
-
+    safeShutdown();
   /* USER CODE END UsageFault_IRQn 0 */
   while (1)
   {
@@ -273,9 +275,16 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
     }
 }
 
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
     if (GPIO_Pin == TOF_INT_Pin) {
         RESIN_DistanceConversionDoneCallback();
     }
+}
+
+void safeShutdown(void)
+{
+    __HAL_TIM_SET_COMPARE(&htim9, TIM_CHANNEL_1, 0);
+    HAL_GPIO_WritePin(SYS_LD_USER1_GPIO_Port, SYS_LD_USER1_Pin, GPIO_PIN_SET);
 }
 /* USER CODE END 1 */

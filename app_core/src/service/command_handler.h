@@ -18,10 +18,10 @@ public:
 private:
     static constexpr std::size_t MAX_MESSAGE_LENGTH {129};
 
+    uint8_t _message_buffer_irq[MAX_MESSAGE_LENGTH] {};
+    uint8_t _message_buffer_proc[MAX_MESSAGE_LENGTH] {};
+    rtos::MessageQueue<uint8_t[MAX_MESSAGE_LENGTH]> _queue {10};
     se_oss::Logger _log;
-    std::array<uint8_t, MAX_MESSAGE_LENGTH> _message_buffer_irq {};
-    std::array<uint8_t, MAX_MESSAGE_LENGTH> _message_buffer_proc {};
-    rtos::MessageQueue<std::array<uint8_t, MAX_MESSAGE_LENGTH>> _queue {10};
 
     bool try_parse_motor_command(const uint8_t* message_raw, std::size_t length);
 

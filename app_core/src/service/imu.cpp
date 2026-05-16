@@ -4,12 +4,14 @@
 #include "lsm6dso.h"
 
 #include <cbor.h>
-#include <cstdint>
+#include <cobs.h>
+
 #include <stm32f7xx_hal.h>
 
-extern UART_HandleTypeDef huart2;
+using namespace robby;
 
-Imu::Imu()
+Imu::Imu(rtos::MessageQueue<AccelerationFrame>& frames) :
+    _frames{frames}
 {
     LSM6DSO_IO_t io_ctx;
 
@@ -24,63 +26,102 @@ Imu::Imu()
     LSM6DSO_RegisterBusIO(&_driver, &io_ctx);
     LSM6DSO_Init(&_driver);
 
-    LSM6DSO_ACC_SetOutputDataRate(&_driver, 104.0F);
-    LSM6DSO_ACC_SetFullScale(&_driver, 4);
+    // example from
+    // https://github.com/STMicroelectronics/STMems_Standard_C_drivers/blob/master/lsm6dso_STdC/examples/lsm6dso_fifo.c
+    /* Restore default configuration */
+    lsm6dso_reset_set(&_driver.Ctx, PROPERTY_ENABLE);
 
-    LSM6DSO_GYRO_SetOutputDataRate(&_driver, 104.0F);
-    LSM6DSO_GYRO_SetFullScale(&_driver, 2000);
+    uint8_t rst;
+    do {
+        lsm6dso_reset_get(&_driver.Ctx, &rst);
+    } while (rst);
 
-    LSM6DSO_ACC_Enable(&_driver);
-    LSM6DSO_GYRO_Enable(&_driver);
+    /* Disable I3C interface */
+    lsm6dso_i3c_disable_set(&_driver.Ctx, LSM6DSO_I3C_DISABLE);
+    /* Enable Block Data Update */
+    lsm6dso_block_data_update_set(&_driver.Ctx, PROPERTY_ENABLE);
+    lsm6dso_xl_full_scale_set(&_driver.Ctx, LSM6DSO_2g);
+    lsm6dso_gy_full_scale_set(&_driver.Ctx, LSM6DSO_2000dps);
+    lsm6dso_fifo_watermark_set(&_driver.Ctx, 210);
+    lsm6dso_fifo_xl_batch_set(&_driver.Ctx, LSM6DSO_XL_BATCHED_AT_833Hz);
+    lsm6dso_fifo_gy_batch_set(&_driver.Ctx, LSM6DSO_GY_BATCHED_AT_833Hz);
+    /* Set FIFO mode to Stream mode (aka Continuous Mode) */
+    lsm6dso_fifo_mode_set(&_driver.Ctx, LSM6DSO_STREAM_MODE);
+}
+
+void Imu::start()
+{
+    /* Set Output Data Rate */
+    lsm6dso_xl_data_rate_set(&_driver.Ctx, LSM6DSO_XL_ODR_833Hz);
+    lsm6dso_gy_data_rate_set(&_driver.Ctx, LSM6DSO_GY_ODR_833Hz);
 }
 
 void Imu::process()
 {
-    LSM6DSO_Axes_t accel;
-    LSM6DSO_Axes_t gyro;
+    std::size_t num_samples = 0;
 
-    LSM6DSO_ACC_GetAxes(&_driver, &accel);
-    LSM6DSO_GYRO_GetAxes(&_driver, &gyro);
+    uint8_t fifo_overrun = 0;
+    lsm6dso_fifo_ovr_flag_get(&_driver.Ctx, &fifo_overrun);
 
-    size_t length = serialize_measurement(_message_buffer_, accel.z);
-    HAL_UART_Transmit(&huart2, _message_buffer_, length, HAL_MAX_DELAY);
-}
+    /* Read watermark flag */
+    uint8_t wmflag = 0;
+    lsm6dso_fifo_wtm_flag_get(&_driver.Ctx, &wmflag);
 
-size_t Imu::serialize_measurement(uint8_t* buffer, int32_t value)
-{
-    CborEncoder encoder;
-    CborEncoder root_map;
-    CborEncoder payload_map;
-    CborEncoder stream_frame_map;
-    CborEncoder values;
+    /* Read number of samples in FIFO */
+    uint16_t num_samples_available = 0;
+    lsm6dso_fifo_data_level_get(&_driver.Ctx, &num_samples_available);
 
-    cbor_encoder_init(&encoder, buffer, sizeof(_message_buffer_), 0);
-    cbor_encoder_create_map(&encoder, &root_map, 1U);
+    if (wmflag == 0) {
+        if (num_samples_available == 0) {
+            // flush fifo if overrun, should not be necessary by device just stops
+            // measuring otherwise
+            lsm6dso_fifo_mode_set(&_driver.Ctx, LSM6DSO_BYPASS_MODE);
+            lsm6dso_fifo_mode_set(&_driver.Ctx, LSM6DSO_STREAM_MODE);
+        }
 
-    cbor_encode_text_stringz(&root_map, "payload");
-    cbor_encoder_create_map(&root_map, &payload_map, 1U);
-
-    cbor_encode_text_stringz(&payload_map, "StreamFrame");
-    cbor_encoder_create_map(&payload_map, &stream_frame_map, 3U);
-
-    cbor_encode_text_stringz(&stream_frame_map, "id");
-    cbor_encode_uint(&stream_frame_map, 0U);
-
-    cbor_encode_text_stringz(&stream_frame_map, "sequence");
-    cbor_encode_uint(&stream_frame_map, 0U);
-
-    cbor_encode_text_stringz(&stream_frame_map, "values");
-    cbor_encoder_create_array(&stream_frame_map, &values, 1U);
-    cbor_encode_int(&values, value);
-
-    cbor_encoder_close_container(&stream_frame_map, &values);
-    cbor_encoder_close_container(&payload_map, &stream_frame_map);
-    cbor_encoder_close_container(&root_map, &payload_map);
-    CborError result = cbor_encoder_close_container(&encoder, &root_map);
-
-    if (result != CborNoError) {
-        return 0U;
+        return;
     }
 
-    return cbor_encoder_get_buffer_size(&encoder, buffer);
+    if (num_samples_available == 0) {
+        return;
+    }
+
+    for (uint16_t i = 0; i < num_samples_available && num_samples < _acceleration_frame.size(); i++) {
+        /* Read FIFO tag */
+        lsm6dso_fifo_tag_t reg_tag;
+        lsm6dso_fifo_sensor_tag_get(&_driver.Ctx, &reg_tag);
+
+        axis3bit16_t data_raw_acceleration;
+        axis3bit16_t data_raw_angular_rate;
+
+        switch (reg_tag) {
+            case LSM6DSO_XL_NC_TAG:
+                memset(data_raw_acceleration.u8bit, 0x00, 3 * sizeof(int16_t));
+                lsm6dso_fifo_out_raw_get(&_driver.Ctx, data_raw_acceleration.u8bit);
+                _acceleration_frame[num_samples].x = lsm6dso_from_fs2_to_mg(data_raw_acceleration.i16bit[0]);
+                _acceleration_frame[num_samples].y = lsm6dso_from_fs2_to_mg(data_raw_acceleration.i16bit[1]);
+                _acceleration_frame[num_samples].z = lsm6dso_from_fs2_to_mg(data_raw_acceleration.i16bit[2]);
+                num_samples++;
+                break;
+
+            case LSM6DSO_GYRO_NC_TAG:
+                memset(data_raw_angular_rate.u8bit, 0x00, 3 * sizeof(int16_t));
+                lsm6dso_fifo_out_raw_get(&_driver.Ctx, data_raw_angular_rate.u8bit);
+                // angular_rate_mdps[0] = lsm6dso_from_fs2000_to_mdps(data_raw_angular_rate.i16bit[0]);
+                // angular_rate_mdps[1] = lsm6dso_from_fs2000_to_mdps(data_raw_angular_rate.i16bit[1]);
+                // angular_rate_mdps[2] = lsm6dso_from_fs2000_to_mdps(data_raw_angular_rate.i16bit[2]);
+                break;
+
+            default:
+                /* Flush unused samples */
+                axis3bit16_t dummy;
+                memset(dummy.u8bit, 0x00, 3 * sizeof(int16_t));
+                lsm6dso_fifo_out_raw_get(&_driver.Ctx, dummy.u8bit);
+                break;
+        }
+    }
+
+    if (!_frames.trySend(_acceleration_frame)) {
+        // message something
+    }
 }

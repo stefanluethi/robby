@@ -33,7 +33,20 @@ message("Build type: " ${CMAKE_BUILD_TYPE})
 enable_language(C ASM)
 
 # Create an executable object type
-add_executable(${CMAKE_PROJECT_NAME})
+add_executable(
+        ${CMAKE_PROJECT_NAME}
+        src/app/app.cpp
+        src/driver/fuelgauge.c
+        src/driver/serial_driver.cpp
+        src/glue/araldite.cpp
+        src/service/distance_visualizer.cpp
+        src/service/tof_platform.c
+        src/service/imu.cpp
+        src/service/data_publisher.cpp
+        src/service/command_handler.cpp
+        src/util/colormap.cpp
+        src/proto/serializer.cpp
+)
 
 add_subdirectory(lib)
 
@@ -46,21 +59,6 @@ target_compile_options(stm32cubemx INTERFACE -UDEBUG)
 target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
         # Add user defined library search paths
 )
-
-# Add sources to executable
-target_sources(${CMAKE_PROJECT_NAME} PRIVATE
-        src/app/app.cpp
-        src/driver/fuelgauge.c
-        src/driver/serial_driver.cpp
-        src/glue/araldite.cpp
-        src/service/distance_visualizer.cpp
-        src/service/tof_platform.c
-        src/service/imu.cpp
-        src/service/data_publisher.cpp
-        src/service/command_handler.cpp
-        src/util/colormap.cpp
-)
-
 
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE

@@ -28,6 +28,10 @@
 #include "stm32f7xx_hal_def.h"
 #include "stm32f7xx_hal_uart.h"
 #include "stm32f7xx_it.h"
+
+#include <FreeRTOS.h>
+#include <task.h>
+
 #include <stdint.h>
 /* USER CODE END Includes */
 
@@ -1521,6 +1525,17 @@ void vConfigureTimerForRunTimeStats(void) {
 }
 
 extern uint32_t getRuntimeCount(void) { return DWT->CYCCNT; }
+
+void vApplicationMallocFailedHook(void)
+{
+    while (true);
+}
+
+void vApplicationStackOverflowHook(TaskHandle_t task, char *taskName)
+{
+    printf("!!! Stack overflow in task %s !!!\n", taskName);
+    vTaskDelete(task);
+}
 
 /* USER CODE END 4 */
 

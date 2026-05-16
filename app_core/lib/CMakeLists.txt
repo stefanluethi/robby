@@ -74,7 +74,7 @@ set(SE_OSS_LOG_SUPPORT_CBOR ON CACHE BOOL "" FORCE)
 FetchContent_Declare(
         se-oss
         GIT_REPOSITORY https://github.com/sourceengineers/se-oss.git
-        GIT_TAG        d4ecb62ffa0278873240ca04d0dd3cc20436f5e7
+        GIT_TAG        8272f7b75c1186decec72d3ae114d83e94273d7a
 )
 FetchContent_MakeAvailable(se-oss)
 
