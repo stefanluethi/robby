@@ -33,8 +33,10 @@ pub struct StreamFrameRaw {
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct ThreadInfo {
-    pub stack_usage: u8,
     pub name: String,
+    pub priority: u8,
+    pub stack_usage: f32,
+    pub stack_size: u32,
     pub runtime: f32,
 }
 

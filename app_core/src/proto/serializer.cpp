@@ -131,3 +131,57 @@ std::size_t robby::serialize(uint8_t* buffer, std::size_t buffer_size, const Str
 
     return cbor_encoder_get_buffer_size(&encoder, buffer);
 }
+std::size_t robby::serialize(uint8_t* buffer, std::size_t buffer_size, const ThreadTable& thread_table)
+{
+    CborEncoder encoder;
+    CborEncoder root_map;
+    CborEncoder payload_map;
+    CborEncoder thread_table_map;
+    CborEncoder threads_array;
+    CborEncoder thread_entry_map;
+
+    cbor_encoder_init(&encoder, buffer, buffer_size, 0);
+    cbor_encoder_create_map(&encoder, &root_map, 1U);
+
+    cbor_encode_text_stringz(&root_map, "payload");
+    cbor_encoder_create_map(&root_map, &payload_map, 1U);
+
+    cbor_encode_text_stringz(&payload_map, "ThreadTable");
+    cbor_encoder_create_map(&payload_map, &thread_table_map, 1U);
+
+    cbor_encode_text_stringz(&thread_table_map, "threads");
+    cbor_encoder_create_array(&thread_table_map, &threads_array, thread_table.size);
+
+    for (std::size_t i = 0; i < thread_table.size; ++i) {
+        auto& thread = thread_table.threads[i];
+        cbor_encoder_create_map(&threads_array, &thread_entry_map, 5U);
+
+        cbor_encode_text_stringz(&thread_entry_map, "name");
+        cbor_encode_text_stringz(&thread_entry_map, thread.name);
+
+        cbor_encode_text_stringz(&thread_entry_map, "priority");
+        cbor_encode_uint(&thread_entry_map, thread.priority);
+
+        cbor_encode_text_stringz(&thread_entry_map, "stack_usage");
+        cbor_encode_float(&thread_entry_map, thread.stack_usage);
+
+        cbor_encode_text_stringz(&thread_entry_map, "stack_size");
+        cbor_encode_uint(&thread_entry_map, thread.stack_size);
+
+        cbor_encode_text_stringz(&thread_entry_map, "runtime");
+        cbor_encode_float(&thread_entry_map, thread.runtime);
+
+        cbor_encoder_close_container(&threads_array, &thread_entry_map);
+    }
+
+    cbor_encoder_close_container(&thread_table_map, &threads_array);
+    cbor_encoder_close_container(&payload_map, &thread_table_map);
+    cbor_encoder_close_container(&root_map, &payload_map);
+    CborError result = cbor_encoder_close_container(&encoder, &root_map);
+
+    if (result != CborNoError) {
+        return 0U;
+    }
+
+    return cbor_encoder_get_buffer_size(&encoder, buffer);
+}

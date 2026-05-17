@@ -36,7 +36,8 @@ impl Viewable for TaskManager {
                 .column(egui_extras::Column::auto())
                 .column(egui_extras::Column::auto())
                 .column(egui_extras::Column::auto())
-                .column(egui_extras::Column::remainder())
+                .column(egui_extras::Column::auto())
+                .column(egui_extras::Column::auto())
                 .column(egui_extras::Column::remainder())
                 .min_scrolled_height(0.0)
                 .max_scroll_height(available_height);
@@ -47,34 +48,44 @@ impl Viewable for TaskManager {
                         ui.strong("Name");
                     });
                     header.col(|ui| {
+                        ui.strong("Priority");
+                    });
+                    header.col(|ui| {
                         ui.strong("Stack Usage %");
                     });
                     header.col(|ui| {
-                        ui.strong("Stack Usage B");
+                        ui.strong("Stack Size kB");
                     });
                     header.col(|ui| {
                         ui.strong("CPU Load %");
                     });
                 })
                 .body(|mut body| {
+                    model.thread_table.threads.sort_by(|a, b| {
+                        a.name.to_lowercase().cmp(&b.name.to_lowercase())
+                    });
                     for thread in model.thread_table.threads.iter() {
                         body.row(20.0_f32, |mut row| {
                             row.col(|ui| {
                                 ui.label(thread.name.clone());
                             });
                             row.col(|ui| {
-                                ui.label(format!("{}%", thread.stack_usage));
+                                ui.label(format!("{}", thread.priority));
                             });
                             row.col(|ui| {
-                                ui.label("1200");
+                                ui.label(format!("{:.1}", thread.stack_usage));
                             });
                             row.col(|ui| {
-                                ui.label(format!("{:.1}%", thread.runtime));
+                                ui.label(format!("{:.2}", thread.stack_size as f32 / 1024.0));
+                            });
+                            row.col(|ui| {
+                                ui.label(format!("{:.1}", thread.runtime));
                             });
                         });
                     }
                 });
 
+            ui.add_space(10.0);
             ui.spacing_mut().slider_width = 300.0;
             let _ = ui.add(
                 egui::Slider::new(&mut self.slider_value, 0_f32..=100_f32)

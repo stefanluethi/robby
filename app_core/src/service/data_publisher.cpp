@@ -70,14 +70,39 @@ void DataPublisher::publish()
             auto length = serialize(_cbor_buffer.data(), _cbor_buffer.size(), stream_descriptor);
             encode_and_write(length);
         }
+
+        update_thread_table();
+        auto length = serialize(_cbor_buffer.data(), _cbor_buffer.size(), _thread_table);
+        encode_and_write(length);
     }
 }
 void DataPublisher::encode_and_write(std::size_t length)
 {
+    if (length == 0U) {
+        return;
+    }
     std::size_t cobs_length {0U};
     auto encoder_result = cobs_encode(_cbor_buffer.data(), length, _cobs_buffer.data(), _cobs_buffer.size(), &cobs_length);
     if (encoder_result == COBS_RET_SUCCESS) {
         _serial.write(_cobs_buffer.data(), cobs_length);
     }
+}
+void DataPublisher::update_thread_table()
+{
+    uint32_t total_runtime {0U};
+    std::size_t task_count = uxTaskGetSystemState(_task_status.data(), _task_status.size(), &total_runtime);
+
+    for (std::size_t i = 0; i < std::min(task_count, _thread_table.threads.size()); ++i) {
+        auto& thread = _thread_table.threads[i];
+        auto& task_info = _task_status[i];
+        std::strncpy(thread.name, task_info.pcTaskName, sizeof(thread.name));
+        thread.name[sizeof(thread.name) - 1U] = '\0';
+        thread.priority = task_info.uxCurrentPriority;
+        // todo: find fix for counter wrap around
+        thread.runtime = total_runtime > 0 ? 100.0F * task_info.ulRunTimeCounter / total_runtime : 0.0F;
+        thread.stack_size = task_info.pxEndOfStack - task_info.pxStackBase;
+        thread.stack_usage = 100.0F * (1.0F - static_cast<float>(task_info.usStackHighWaterMark) / thread.stack_size);
+    }
+    _thread_table.size = std::min(task_count, _thread_table.threads.size());
 }
 

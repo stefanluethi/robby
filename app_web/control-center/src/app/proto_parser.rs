@@ -17,10 +17,7 @@ pub fn parse_message(message: Vec<u8>, model: &mut Model) {
                     // log::log!(target: "robby", log::Level::Warn, "ws error: {}", e);
                 },
                 proto::Payload::ThreadTable(thread_table) => {
-                    for thread in thread_table.threads.iter() {
-                        log::info!("thread info \"{}\" stack usage: {}, cpu usage {}",
-                                            thread.name, thread.stack_usage, thread.runtime);
-                    }
+                    log::info!("received thread info");
                     model.thread_table = thread_table;
                 }
                 proto::Payload::DistanceMap(distances) => {

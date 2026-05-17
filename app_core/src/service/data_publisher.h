@@ -4,6 +4,7 @@
 #include "driver/serial_driver.h"
 #include "imu.h"
 #include "proto/stream.h"
+#include "proto/thread_table.h"
 
 #include <array>
 
@@ -40,8 +41,8 @@ private:
 
     // Encoding buffers
     SerialDriver& _serial;
-    std::array<uint8_t, 1024> _cbor_buffer {};
-    std::array<uint8_t, COBS_ENCODE_MAX(1024)> _cobs_buffer {};
+    std::array<uint8_t, 2048> _cbor_buffer {};
+    std::array<uint8_t, COBS_ENCODE_MAX(2048)> _cobs_buffer {};
 
     // Message buffers
     rtos::MessageQueue<AccelerationFrame>& _acceleration_frames;
@@ -51,9 +52,13 @@ private:
     DistanceMap& _distance_map;
     std::array<DistanceSensorImage, 3> _sensors {};
 
+    ThreadTable _thread_table {};
+    std::array<TaskStatus_t, 16> _task_status {};
+
     uint32_t _last_publish_tick {0U};
 
     void encode_and_write(std::size_t length);
+    void update_thread_table();
 
     static constexpr std::array<StreamDescriptor, 3> _stream_descriptors = {
         StreamDescriptor {

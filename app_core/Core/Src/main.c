@@ -1524,7 +1524,11 @@ void vConfigureTimerForRunTimeStats(void) {
     DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
 }
 
-extern uint32_t getRuntimeCount(void) { return DWT->CYCCNT; }
+extern uint32_t getRuntimeCount(void)
+{
+    // return DWT->CYCCNT;
+    return HAL_GetTick();
+}
 
 void vApplicationMallocFailedHook(void)
 {
