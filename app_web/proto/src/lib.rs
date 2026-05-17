@@ -1,6 +1,6 @@
 use serde::{Serialize, Deserialize};
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct StreamDescriptor {
     pub id: u16,
     pub name: String,
@@ -38,7 +38,7 @@ pub struct ThreadInfo {
     pub runtime: f32,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Default)]
 pub struct ThreadTable {
     pub threads: Vec<ThreadInfo>,
 }
@@ -48,7 +48,7 @@ pub struct LogRecord {
     pub message: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Default)]
 pub struct DistanceMap {
     pub distances_mm: [[u16; 8]; 24],
 }

@@ -21,7 +21,7 @@ fn main() -> eframe::Result {
         ..Default::default()
     };
     eframe::run_native(
-        "eframe template",
+        "robby control center",
         native_options,
         Box::new(|cc| Ok(Box::new(robby_control_center::App::new(cc)))),
     )

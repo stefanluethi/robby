@@ -1,5 +1,6 @@
 mod proto_parser;
 mod view;
+mod model;
 
 use std::collections::BTreeMap;
 use view::Viewable;
@@ -33,9 +34,11 @@ impl From<&mut Pane> for &str {
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct Views {
     esp_address: String,
-    adc_plot: view::plot::Plot,
+    stream_view: view::plot::Plot,
     task_manager: view::task_manager::TaskManager,
     room_view: view::heatmap::Heatmap,
+
+    model: model::Model,
 
     #[serde(skip)]
     ws_receiver: Option<ewebsock::WsReceiver>,
@@ -46,10 +49,11 @@ pub struct Views {
 impl Default for Views {
     fn default() -> Self {
         Self {
-            esp_address: "ws://localhost:3000/robby".to_owned(),
-            adc_plot: view::plot::Plot::new(),
+            esp_address: "ws://192.168.1.70/ws/robby".to_owned(),
+            stream_view: view::plot::Plot::new(),
             task_manager: view::task_manager::TaskManager::new(),
             room_view: view::heatmap::Heatmap::new(),
+            model: model::Model::default(),
             ws_receiver: None,
             ws_sender: None,
         }
@@ -88,34 +92,7 @@ impl Views {
                             log::log!(target: "robby", log::Level::Info, "{}", msg);
                         }
                         ewebsock::WsMessage::Binary(msg) => {
-                            log::log!(target: "robby", log::Level::Info, "received message {}", hex_string::HexString::from_bytes(&msg).as_string());
-                            if let Ok(message) = serde_cbor_2::from_slice::<proto::Message>(&msg) {
-                                match message.payload {
-                                    proto::Payload::StreamDescriptor(_) => todo!(),
-                                    proto::Payload::StreamFrame(frame) => {
-                                        self.adc_plot.update(
-                                            frame
-                                                .values
-                                                .iter()
-                                                .map(|v| f64::from(*v) as f32)
-                                                .collect::<Vec<f32>>(),
-                                        );
-                                        log::log!(target: "robby", log::Level::Trace, "ws received {} samples", frame.values.len());
-                                    }
-                                    proto::Payload::Log(_) => todo!(),
-                                    proto::Payload::ThreadTable(thread_table) => {
-                                        for thread in thread_table.threads.iter() {
-                                            log::log!(target: "robby", log::Level::Info, "thread info \"{}\" stack usage: {}, cpu usage {}", 
-                                        thread.name, thread.stack_usage, thread.runtime);
-                                        }
-                                        self.task_manager.update(thread_table);
-                                    }
-                                    proto::Payload::DistanceMap(distances) => {
-                                        log::log!(target: "robby", log::Level::Info, "distances {:?}", &distances);
-                                        self.room_view.update(distances);
-                                    }
-                                };
-                            }
+                            proto_parser::parse_message(msg, &mut self.model);
                         }
                         _ => {
                             log::log!(target: "robby", log::Level::Info, "ws unknown message received")
@@ -193,7 +170,7 @@ impl egui_tiles::Behavior<Pane> for Views {
 
         match pane {
             Pane::Plots => {
-                self.adc_plot.view(ui);
+                self.stream_view.view(ui, &mut self.model);
             }
             Pane::Logs => {
                 egui_logger::logger_ui()
@@ -202,10 +179,10 @@ impl egui_tiles::Behavior<Pane> for Views {
                     .show(ui);
             }
             Pane::TaskManager => {
-                self.task_manager.view(ui);
+                self.task_manager.view(ui, &mut self.model);
             }
             Pane::RoomView => {
-                self.room_view.view(ui);
+                self.room_view.view(ui, &mut self.model);
             }
         }
 

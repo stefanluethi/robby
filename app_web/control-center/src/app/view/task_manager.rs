@@ -1,9 +1,9 @@
+use crate::app::model::Model;
 use super::Viewable;
 
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)]
 pub struct TaskManager {
-    thread_table: proto::ThreadTable,
     slider_value: f32,
 }
 
@@ -16,15 +16,8 @@ impl Default for TaskManager {
 impl TaskManager {
     pub fn new() -> Self {
         Self {
-            thread_table: proto::ThreadTable {
-                threads: Vec::new(),
-            },
             slider_value: 0.0,
         }
-    }
-
-    pub fn update(&mut self, thread_table: proto::ThreadTable) {
-        self.thread_table = thread_table;
     }
 
     pub fn value(&self) -> f32 {
@@ -33,7 +26,7 @@ impl TaskManager {
 }
 
 impl Viewable for TaskManager {
-    fn view(&mut self, ui: &mut egui::Ui) {
+    fn view(&mut self, ui: &mut egui::Ui, model: &mut Model) {
         ui.vertical(|ui| {
             let available_height = ui.available_height();
             let table = egui_extras::TableBuilder::new(ui)
@@ -64,7 +57,7 @@ impl Viewable for TaskManager {
                     });
                 })
                 .body(|mut body| {
-                    for thread in self.thread_table.threads.iter() {
+                    for thread in model.thread_table.threads.iter() {
                         body.row(20.0_f32, |mut row| {
                             row.col(|ui| {
                                 ui.label(thread.name.clone());
