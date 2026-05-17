@@ -49,9 +49,8 @@ private:
     static constexpr uint32_t SENSOR_RESOLUTION_Y = 8U;
 
     bool setup_sensor(VL53L8CX_Configuration* device);
-    void draw_results();
-    void trigger_sensor(DistanceSensor sensor);
-    size_t serialize_distmap(uint8_t* buffer, const VL53L8CX_ResultsData* sensor_results);
+    void draw_results() const;
+    static void trigger_sensor(DistanceSensor sensor);
 
     VL53L8CX_Configuration _devices[CONF_N_SENSORS]{};
     VL53L8CX_ResultsData _results[CONF_N_SENSORS]{};

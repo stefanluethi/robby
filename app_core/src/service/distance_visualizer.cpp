@@ -99,7 +99,7 @@ void DistanceVisualizer::process()
                 if (status == 5U || status == 9U) {
                     distance = _results[sensor_index].distance_mm[cell];
                 }
-                _distance_map.sensors[sensor_index][x][y] = distance;
+                _distance_map.sensors[i][x][y] = distance;
             }
         }
     }
@@ -124,7 +124,7 @@ bool DistanceVisualizer::setup_sensor(VL53L8CX_Configuration* device)
     return status != 0;
 }
 
-void DistanceVisualizer::draw_results()
+void DistanceVisualizer::draw_results() const
 {
     for (size_t sensor = 0; sensor < CONF_N_SENSORS; ++sensor) {
         uint16_t offset_x = static_cast<uint16_t>((CONF_N_SENSORS - sensor - 1U) * 84U);

@@ -2,7 +2,7 @@
 
 #include <cbor.h>
 
-std::size_t robby::serialize(uint8_t* buffer, std::size_t buffer_size, const AccelerationFrame& frame)
+std::size_t robby::serialize(uint8_t* buffer, std::size_t buffer_size, const int16_t* array, std::size_t length, uint8_t stream_id, uint32_t sequence_number)
 {
     CborEncoder encoder;
     CborEncoder root_map;
@@ -20,15 +20,15 @@ std::size_t robby::serialize(uint8_t* buffer, std::size_t buffer_size, const Acc
     cbor_encoder_create_map(&payload_map, &stream_frame_map, 3U);
 
     cbor_encode_text_stringz(&stream_frame_map, "id");
-    cbor_encode_uint(&stream_frame_map, 0U);  // todo!
+    cbor_encode_uint(&stream_frame_map, stream_id);
 
     cbor_encode_text_stringz(&stream_frame_map, "sequence");
-    cbor_encode_uint(&stream_frame_map, 0U);  // todo!
+    cbor_encode_uint(&stream_frame_map, sequence_number);
 
     cbor_encode_text_stringz(&stream_frame_map, "values");
-    cbor_encoder_create_array(&stream_frame_map, &values, frame.size());
-    for (size_t i = 0; i < frame.size(); ++i) {
-        cbor_encode_int(&values, frame[i].z);
+    cbor_encoder_create_array(&stream_frame_map, &values, length);
+    for (size_t i = 0; i < length; ++i) {
+        cbor_encode_int(&values, *(array + i));
     }
 
     cbor_encoder_close_container(&stream_frame_map, &values);
@@ -43,11 +43,11 @@ std::size_t robby::serialize(uint8_t* buffer, std::size_t buffer_size, const Acc
     return cbor_encoder_get_buffer_size(&encoder, buffer);
 }
 
-std::size_t robby::serialize(uint8_t* buffer, std::size_t buffer_size, const DistanceMap& distances)
+std::size_t robby::serialize(uint8_t* buffer, std::size_t buffer_size, const std::array<DistanceSensorImage, 3>& sensors)
 {
-    const std::size_t n_sensors {distances.sensors.size()};
-    const std::size_t resolution_x {distances.sensors[0].size()};
-    const std::size_t resolution_y {distances.sensors[0][0].size()};
+    const std::size_t n_sensors {sensors.size()};
+    const std::size_t resolution_x {sensors[0].size()};
+    const std::size_t resolution_y {sensors[0][0].size()};
     CborEncoder encoder;
     CborEncoder root_map;
     CborEncoder payload_map;
@@ -67,12 +67,11 @@ std::size_t robby::serialize(uint8_t* buffer, std::size_t buffer_size, const Dis
     cbor_encode_text_stringz(&distance_map, "distances_mm");
     cbor_encoder_create_array(&distance_map, &array_x, n_sensors * resolution_x);
 
-    for (size_t i = 0; i < distances.sensors.size(); ++i) {
-        for (size_t x = 0; x < resolution_x; ++x) {
+    for (const auto& sensor : sensors) {
+        for (const auto& row : sensor) {
             cbor_encoder_create_array(&array_x, &array_y, resolution_y);
 
-            for (size_t y = 0; y < resolution_y; ++y) {
-                int16_t distance = distances.sensors[i][x][y];
+            for (int16_t distance : row) {
                 cbor_encode_uint(&array_y, distance >= 0 ? distance : UINT16_MAX);
             }
 

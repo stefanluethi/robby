@@ -9,14 +9,15 @@
 
 namespace robby {
 
+template<std::size_t N>
 struct Acceleration
 {
-    int16_t x;
-    int16_t y;
-    int16_t z;
+    std::array<int16_t, N> x {};
+    std::array<int16_t, N> y {};
+    std::array<int16_t, N> z {};
 };
 
-using AccelerationFrame = std::array<Acceleration, 100>;
+using AccelerationFrame = Acceleration<100>;
 
 class Imu {
 public:

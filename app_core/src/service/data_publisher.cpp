@@ -16,16 +16,48 @@ DataPublisher::DataPublisher(
 
 void DataPublisher::publish()
 {
+    // IMU measurement streams
     while (_acceleration_frames.tryReceive(_acceleration_frame)) {
-        auto length = serialize(_cbor_buffer.data(), _cbor_buffer.size(), _acceleration_frame);
+        auto length = serialize(
+            _cbor_buffer.data(),
+            _cbor_buffer.size(),
+            _acceleration_frame.x.data(),
+            _acceleration_frame.x.size(),
+            to_uint(StreamId::ACCELERATION_X),
+            _acceleration_sequence_counter
+        );
         encode_and_write(length);
+
+        length = serialize(
+            _cbor_buffer.data(),
+            _cbor_buffer.size(),
+            _acceleration_frame.y.data(),
+            _acceleration_frame.y.size(),
+            to_uint(StreamId::ACCELERATION_Y),
+            _acceleration_sequence_counter
+        );
+        encode_and_write(length);
+
+        length = serialize(
+            _cbor_buffer.data(),
+            _cbor_buffer.size(),
+            _acceleration_frame.z.data(),
+            _acceleration_frame.z.size(),
+            to_uint(StreamId::ACCELERATION_Z),
+            _acceleration_sequence_counter
+        );
+        encode_and_write(length);
+
+        _acceleration_sequence_counter++;
     }
 
+    // Distance map
     if (_distance_map.updated.tryAcquire(0U) && _distance_map.lock.tryLock(100U)) {
-        auto length = serialize(_cbor_buffer.data(), _cbor_buffer.size(), _distance_map);
-        encode_and_write(length);
+        std::ranges::copy(_distance_map.sensors, _sensors.begin());
         _distance_map.lock.unlock();
-        // todo: make copy to reduce lock time
+
+        auto length = serialize(_cbor_buffer.data(), _cbor_buffer.size(), _sensors);
+        encode_and_write(length);
     }
 }
 void DataPublisher::encode_and_write(std::size_t length)

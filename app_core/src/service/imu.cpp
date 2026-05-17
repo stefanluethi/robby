@@ -86,7 +86,7 @@ void Imu::process()
         return;
     }
 
-    for (uint16_t i = 0; i < num_samples_available && num_samples < _acceleration_frame.size(); i++) {
+    for (uint16_t i = 0; i < num_samples_available && num_samples < _acceleration_frame.x.size(); i++) {
         /* Read FIFO tag */
         lsm6dso_fifo_tag_t reg_tag;
         lsm6dso_fifo_sensor_tag_get(&_driver.Ctx, &reg_tag);
@@ -98,9 +98,9 @@ void Imu::process()
             case LSM6DSO_XL_NC_TAG:
                 memset(data_raw_acceleration.u8bit, 0x00, 3 * sizeof(int16_t));
                 lsm6dso_fifo_out_raw_get(&_driver.Ctx, data_raw_acceleration.u8bit);
-                _acceleration_frame[num_samples].x = lsm6dso_from_fs2_to_mg(data_raw_acceleration.i16bit[0]);
-                _acceleration_frame[num_samples].y = lsm6dso_from_fs2_to_mg(data_raw_acceleration.i16bit[1]);
-                _acceleration_frame[num_samples].z = lsm6dso_from_fs2_to_mg(data_raw_acceleration.i16bit[2]);
+                _acceleration_frame.x[num_samples] = lsm6dso_from_fs2_to_mg(data_raw_acceleration.i16bit[0]);
+                _acceleration_frame.y[num_samples] = lsm6dso_from_fs2_to_mg(data_raw_acceleration.i16bit[1]);
+                _acceleration_frame.z[num_samples] = lsm6dso_from_fs2_to_mg(data_raw_acceleration.i16bit[2]);
                 num_samples++;
                 break;
 
