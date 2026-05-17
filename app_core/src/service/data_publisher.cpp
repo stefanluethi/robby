@@ -59,6 +59,18 @@ void DataPublisher::publish()
         auto length = serialize(_cbor_buffer.data(), _cbor_buffer.size(), _sensors);
         encode_and_write(length);
     }
+
+    // Slowly updated vlaues
+    uint32_t now_ticks = xTaskGetTickCount();
+    if (xTaskGetTickCount() - _last_publish_tick > PUBLISH_INTERVAL_SLOW) {
+        _last_publish_tick = now_ticks;
+
+        // Send stream descriptors
+        for (const auto& stream_descriptor : _stream_descriptors) {
+            auto length = serialize(_cbor_buffer.data(), _cbor_buffer.size(), stream_descriptor);
+            encode_and_write(length);
+        }
+    }
 }
 void DataPublisher::encode_and_write(std::size_t length)
 {

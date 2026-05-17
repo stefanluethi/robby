@@ -80,28 +80,28 @@ async fn poll_serial(mut session: Session, mut port: Box<dyn serialport::SerialP
             Ok(t) => {
                 let mut buf_index = 0;
                 while buf_index < t {
-                    buf_index = match decoder.push(&serial_buf[buf_index..t]) {
-                        Ok(None) => t,
+                    match decoder.push(&serial_buf[buf_index..t]) {
+                        Ok(None) => {break;},
                         Ok(Some(report)) => {
-                            log::debug!("decoded frame size: {}", report.frame_size());
+                            log::debug!("decoded frame size: {}, {}/{}", report.frame_size(), report.parsed_size(), t);
                             let data = Vec::from(&decoder.dest()[..report.frame_size()]);
                             if session.binary(data).await.is_err() {
                                 return;
                             };
-                            report.parsed_size()
+                            buf_index += report.parsed_size();
                         },
                         Err(e) => {
                             log::warn!("cobs decoder error: {e}");
                             break;
                         },
-                    }
+                    };
                 }
             }
             Err(ref e) if e.kind() == io::ErrorKind::TimedOut => (),
             Err(e) => eprintln!("{:?}", e),
         }
 
-        sleep(Duration::from_millis(1)).await;
+        sleep(Duration::from_millis(10)).await;
     }
 }
 

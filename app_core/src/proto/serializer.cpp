@@ -90,3 +90,44 @@ std::size_t robby::serialize(uint8_t* buffer, std::size_t buffer_size, const std
 
     return cbor_encoder_get_buffer_size(&encoder, buffer);
 }
+std::size_t robby::serialize(uint8_t* buffer, std::size_t buffer_size, const StreamDescriptor& descriptor)
+{
+    CborEncoder encoder;
+    CborEncoder root_map;
+    CborEncoder payload_map;
+    CborEncoder stream_descriptor_map;
+
+    cbor_encoder_init(&encoder, buffer, buffer_size, 0);
+    cbor_encoder_create_map(&encoder, &root_map, 1U);
+
+    cbor_encode_text_stringz(&root_map, "payload");
+    cbor_encoder_create_map(&root_map, &payload_map, 1U);
+
+    cbor_encode_text_stringz(&payload_map, "StreamDescriptor");
+    cbor_encoder_create_map(&payload_map, &stream_descriptor_map, 5U);
+
+    cbor_encode_text_stringz(&stream_descriptor_map, "id");
+    cbor_encode_uint(&stream_descriptor_map, descriptor.id);
+
+    cbor_encode_text_stringz(&stream_descriptor_map, "name");
+    cbor_encode_text_stringz(&stream_descriptor_map, descriptor.name);
+
+    cbor_encode_text_stringz(&stream_descriptor_map, "scale_factor");
+    cbor_encode_float(&stream_descriptor_map, descriptor.scale_factor);
+
+    cbor_encode_text_stringz(&stream_descriptor_map, "unit");
+    cbor_encode_text_stringz(&stream_descriptor_map, descriptor.unit);
+
+    cbor_encode_text_stringz(&stream_descriptor_map, "sampling_time");
+    cbor_encode_float(&stream_descriptor_map, descriptor.sampling_time);
+
+    cbor_encoder_close_container(&payload_map, &stream_descriptor_map);
+    cbor_encoder_close_container(&root_map, &payload_map);
+    CborError result = cbor_encoder_close_container(&encoder, &root_map);
+
+    if (result != CborNoError) {
+        return 0U;
+    }
+
+    return cbor_encoder_get_buffer_size(&encoder, buffer);
+}

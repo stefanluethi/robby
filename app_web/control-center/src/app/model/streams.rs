@@ -67,11 +67,17 @@ impl Streams {
             self.map.insert(frame.id, Stream::new(frame.id));
         }
         let stream = self.map.get_mut(&frame.id).unwrap();
-        if stream.last_sequence_count + 1 != frame.sequence {
-            log::warn!("stream {}: expected sequence {}, got {}", frame.id, stream.last_sequence_count + 1, frame.sequence);
+
+        if frame.sequence == stream.last_sequence_count {
+            log::warn!("stream {}: duplicate packet received with sequence {}", frame.id, frame.sequence);
+        } else if stream.last_sequence_count.wrapping_add(1) != frame.sequence {
+            log::warn!("stream {}: expected sequence {}, got {}", frame.id, stream.last_sequence_count.wrapping_add(1), frame.sequence);
             // todo: handle jump in data?
+
+            stream.last_sequence_count = frame.sequence;
+        } else {
+            stream.last_sequence_count = frame.sequence;
         }
-        stream.last_sequence_count = frame.sequence;
         stream.values_raw.append(&mut frame.values.clone());
     }
 
