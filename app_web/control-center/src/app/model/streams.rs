@@ -68,7 +68,7 @@ impl Streams {
         }
         let stream = self.map.get_mut(&frame.id).unwrap();
         if stream.last_sequence_count + 1 != frame.sequence {
-            log::log!(target: "robby", log::Level::Warn, "stream {}: expected sequence {}, got {}", frame.id, stream.last_sequence_count + 1, frame.sequence);
+            log::warn!("stream {}: expected sequence {}, got {}", frame.id, stream.last_sequence_count + 1, frame.sequence);
             // todo: handle jump in data?
         }
         stream.last_sequence_count = frame.sequence;
