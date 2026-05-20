@@ -13,8 +13,17 @@ pub fn parse_message(message: Vec<u8>, model: &mut Model) {
                     log::info!("received {} samples", frame.values.len());
                     model.streams.append(&frame);
                 }
-                proto::Payload::Log(_) => {
-                    // log::log!(target: "robby", log::Level::Warn, "ws error: {}", e);
+                proto::Payload::Log(message) => {
+                    log::info!("received log message");
+                    let level = match message.level {
+                        0 => log::Level::Trace,
+                        1 => log::Level::Debug,
+                        2 => log::Level::Info,
+                        3 => log::Level::Warn,
+                        4 => log::Level::Error,
+                        _ => log::Level::Trace,
+                    };
+                    log::log!(target: "robby", level, "{}", message.message);
                 },
                 proto::Payload::ThreadTable(thread_table) => {
                     log::info!("received thread info");

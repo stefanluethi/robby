@@ -180,15 +180,15 @@ impl egui_tiles::Behavior<Pane> for State {
             }
             Pane::AppLogs => {
                 egui_logger::logger_ui()
-                    .enable_category("robby_control_center::app", true)
-                    .enable_category("robby_control_center::app::proto_parser", true)
-                    .enable_category("robby_control_center::app::model::streams", true)
+                    // .enable_category("robby_control_center::app", true)
+                    // .enable_category("robby_control_center::app::proto_parser", true)
+                    // .enable_category("robby_control_center::app::model::streams", true)
                     .include_target(false)
                     .show(ui);
             }
             Pane::TargetLogs => {
                 egui_logger::logger_ui()
-                    .enable_category("robby", true)
+                    // .enable_category("robby", true)
                     .include_target(false)
                     .show(ui);
             }

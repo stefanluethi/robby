@@ -69,12 +69,16 @@ FetchContent_MakeAvailable(tinycbor)
 
 ## se-oss ######################################################################
 
+add_library(se_oss_log_conf INTERFACE)
+target_include_directories(se_oss_log_conf INTERFACE ${CMAKE_SOURCE_DIR}/src/conf/se-oss)
+target_link_libraries(se_oss_log_conf INTERFACE tinycbor)
+
 set(SE_OSS_COMPONENT_LOG ON CACHE BOOL "" FORCE)
-set(SE_OSS_LOG_SUPPORT_CBOR ON CACHE BOOL "" FORCE)
+# set(SE_OSS_LOG_SUPPORT_CBOR ON CACHE BOOL "" FORCE)
 FetchContent_Declare(
         se-oss
         GIT_REPOSITORY https://github.com/sourceengineers/se-oss.git
-        GIT_TAG        8272f7b75c1186decec72d3ae114d83e94273d7a
+        GIT_TAG        0bd2fb79846667c9f509ff960949095d9dac2869
 )
 FetchContent_MakeAvailable(se-oss)
 

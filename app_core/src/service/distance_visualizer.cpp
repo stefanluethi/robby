@@ -27,9 +27,6 @@ extern "C" {
 #define SENSOR_RESOLUTION_X (8U)
 #define SENSOR_RESOLUTION_Y (8U)
 
-extern UART_HandleTypeDef huart2;
-extern UART_HandleTypeDef huart6;
-
 typedef enum {
     SENSOR_RIGHT = 0U,
     SENSOR_MIDDLE = 1U,
@@ -73,18 +70,14 @@ void DistanceVisualizer::process()
     for (uint8_t i = 0; i < CONF_N_SENSORS; ++i) {
         trigger_sensor(static_cast<DistanceSensor>(i));
 
-        uint32_t conversion_timeout = 500U;
-        while (!_data_ready && --conversion_timeout) {
-            rtos::Task::sleep(CONF_POLLING_PERIOD);
+        if (!_data_ready.tryAcquire(500U)) {
+            LOG_WARN(_log, "Sensor conversion timed out");
         }
-        _data_ready = false;
     }
 
     for (uint8_t i = 0; i < CONF_N_SENSORS; ++i) {
         vl53l8cx_get_ranging_data(&_devices[i], &_results[i]);
     }
-
-    // draw_results();
 
     // Update resolut store
     _distance_map.lock.lock();
@@ -105,11 +98,12 @@ void DistanceVisualizer::process()
     }
     _distance_map.lock.unlock();
     _distance_map.updated.release();
+    LOG_DEBUG(_log, "Room sensor view updated");
 }
 
 void DistanceVisualizer::conversion_done_callback()
 {
-    _data_ready = true;
+    _data_ready.release();
 }
 
 bool DistanceVisualizer::setup_sensor(VL53L8CX_Configuration* device)

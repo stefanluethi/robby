@@ -5,10 +5,12 @@
 using namespace robby;
 
 DataPublisher::DataPublisher(
-    SerialDriver& serial,
+    se_oss::LogRegistry<LogContextId, LogSinkId>& log_registry,
+    util::CobsEnc<SerialDriver>& serial,
     rtos::MessageQueue<AccelerationFrame>& accelerationFrames,
     DistanceMap& distance_map
     ) :
+    _log_registry(log_registry),
     _serial(serial),
     _acceleration_frames(accelerationFrames),
     _distance_map(distance_map)
@@ -26,7 +28,7 @@ void DataPublisher::publish()
             to_uint(StreamId::ACCELERATION_X),
             _acceleration_sequence_counter
         );
-        encode_and_write(length);
+        _serial.write(_cbor_buffer.data(), length);
 
         length = serialize(
             _cbor_buffer.data(),
@@ -36,7 +38,7 @@ void DataPublisher::publish()
             to_uint(StreamId::ACCELERATION_Y),
             _acceleration_sequence_counter
         );
-        encode_and_write(length);
+        _serial.write(_cbor_buffer.data(), length);
 
         length = serialize(
             _cbor_buffer.data(),
@@ -46,7 +48,7 @@ void DataPublisher::publish()
             to_uint(StreamId::ACCELERATION_Z),
             _acceleration_sequence_counter
         );
-        encode_and_write(length);
+        _serial.write(_cbor_buffer.data(), length);
 
         _acceleration_sequence_counter++;
     }
@@ -57,7 +59,7 @@ void DataPublisher::publish()
         _distance_map.lock.unlock();
 
         auto length = serialize(_cbor_buffer.data(), _cbor_buffer.size(), _sensors);
-        encode_and_write(length);
+        _serial.write(_cbor_buffer.data(), length);
     }
 
     // Slowly updated vlaues
@@ -68,25 +70,17 @@ void DataPublisher::publish()
         // Send stream descriptors
         for (const auto& stream_descriptor : _stream_descriptors) {
             auto length = serialize(_cbor_buffer.data(), _cbor_buffer.size(), stream_descriptor);
-            encode_and_write(length);
+        _serial.write(_cbor_buffer.data(), length);
         }
 
         update_thread_table();
         auto length = serialize(_cbor_buffer.data(), _cbor_buffer.size(), _thread_table);
-        encode_and_write(length);
+        _serial.write(_cbor_buffer.data(), length);
     }
+
+    _log_registry.distributeMessages();
 }
-void DataPublisher::encode_and_write(std::size_t length)
-{
-    if (length == 0U) {
-        return;
-    }
-    std::size_t cobs_length {0U};
-    auto encoder_result = cobs_encode(_cbor_buffer.data(), length, _cobs_buffer.data(), _cobs_buffer.size(), &cobs_length);
-    if (encoder_result == COBS_RET_SUCCESS) {
-        _serial.write(_cobs_buffer.data(), cobs_length);
-    }
-}
+
 void DataPublisher::update_thread_table()
 {
     uint32_t total_runtime {0U};

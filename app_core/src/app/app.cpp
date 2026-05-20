@@ -1,5 +1,6 @@
 #include "app.h"
 
+#include  "main.h"
 #include "conf/log.h"
 #include "driver/serial_driver.h"
 #include "glue/araldite.h"
@@ -21,22 +22,17 @@ extern UART_HandleTypeDef huart6;
 
 using namespace robby;
 
-template <>
-auto se_oss::logConf<>()
-{
-    return LogConf<PrintfFormatter<TimeFormat::HEX_8>, AtomicBuffer<>, 256>{};
-}
-
 void App::launch()
 {
     // Drivers -----------------------------------------------------------------
-    auto* virtual_com_port = new SerialDriver(huart6);
+    auto virtual_com_port = std::make_unique<se_oss::FilteredSink<util::CobsEnc<SerialDriver>>>(huart6);
+    auto& proto_sink = virtual_com_port->inner();
 
     // Utilities ---------------------------------------------------------------
     auto log_registry = std::make_unique<se_oss::LogRegistry<LogContextId, LogSinkId>>();
-    log_registry->attachSink(LogSinkId::SERIAL, std::make_unique<se_oss::ConsoleSink>());
-    log_registry->getContext(LogContextId::COMMAND).setLogLevel(se_oss::LogLevel::OFF);
-    log_registry->getContext(LogContextId::SPACE_ACQUISITION).setLogLevel(se_oss::LogLevel::OFF);
+    log_registry->attachSink(LogSinkId::SERIAL, std::move(virtual_com_port));
+    // log_registry->getContext(LogContextId::COMMAND).setLogLevel(se_oss::LogLevel::OFF);
+    // log_registry->getContext(LogContextId::SPACE_ACQUISITION).setLogLevel(se_oss::LogLevel::OFF);
 
     // IPC ---------------------------------------------------------------------
     auto* acceleration_frames = new rtos::MessageQueue<AccelerationFrame>(3);
@@ -48,14 +44,22 @@ void App::launch()
         command_handler->data_received_callback(data, length);
     });
 
-    auto distance_visualizer = std::make_unique<DistanceVisualizer>(log_registry->createLogger(LogContextId::SPACE_ACQUISITION), *distance_map);
+    auto distance_visualizer = std::make_unique<DistanceVisualizer>(
+        log_registry->createLogger(LogContextId::SPACE_ACQUISITION),
+        *distance_map
+    );
     g_distanceConversionDone.register_callback([&]() {
         distance_visualizer->conversion_done_callback();
     });
 
     auto imu = std::make_unique<Imu>(*acceleration_frames);
 
-    auto data_publisher = std::make_unique<DataPublisher>(*virtual_com_port, *acceleration_frames, *distance_map);
+    auto data_publisher = std::make_unique<DataPublisher>(
+        *log_registry,
+        proto_sink,
+        *acceleration_frames,
+        *distance_map
+    );
 
     // Threads -----------------------------------------------------------------
     auto command_thread = rtos::Task::build()
@@ -94,15 +98,28 @@ void App::launch()
     });
 
     auto data_publisher_thread = rtos::Task::build()
-    .name("data_publisher")
-    .stackSize(2048)
-    .priority(4)
-    .spawn([&] {
-            while (true) {
-                data_publisher->publish();
-                rtos::Task::sleep(10);
-            }
-    });
+        .name("data_publisher")
+        .stackSize(2048)
+        .priority(4)
+        .spawn([&] {
+                while (true) {
+                    data_publisher->publish();
+                    rtos::Task::sleep(10);
+                }
+        });
+
+    auto heartbeat_thread = rtos::Task::build()
+        .name("heartbeat")
+        .stackSize(512)
+        .priority(1)
+        .spawn([&] {
+                while (true) {
+                    HAL_GPIO_WritePin(SYS_LD_USER2_GPIO_Port, SYS_LD_USER2_Pin, GPIO_PIN_SET);
+                    rtos::Task::sleep(100);
+                    HAL_GPIO_WritePin(SYS_LD_USER2_GPIO_Port, SYS_LD_USER2_Pin, GPIO_PIN_RESET);
+                    rtos::Task::sleep(900);
+                }
+        });
 
     rtos::startScheduler();
 }

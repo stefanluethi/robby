@@ -47,6 +47,8 @@ pub struct ThreadTable {
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct LogRecord {
+    pub timestamp: u64,
+    pub level: u8,
     pub message: String,
 }
 

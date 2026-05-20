@@ -400,10 +400,12 @@ extern uint32_t getRuntimeCount(void);
  * number of the failing assert (for example, "vAssertCalled( __FILE__, __LINE__
  * )" or it can simple disable interrupts and sit in a loop to halt all
  * execution on the failing line for viewing in a debugger. */
+extern void safeShutdown(void);
 #define configASSERT( x )         \
     if( ( x ) == 0 )              \
     {                             \
         taskDISABLE_INTERRUPTS(); \
+        safeShutdown();           \
         __asm("bkpt");            \
         for( ; ; )                \
         ;                         \

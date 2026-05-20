@@ -11,7 +11,7 @@ use actix_web::{
 };
 use futures_util::StreamExt;
 use actix_ws::{AggregatedMessage, Session};
-
+use log::debug;
 
 async fn robby(req: HttpRequest, stream: web::Payload) -> Result<HttpResponse, Error> {
     let (res, mut session, stream) = actix_ws::handle(&req, stream)?;
@@ -50,7 +50,9 @@ async fn robby(req: HttpRequest, stream: web::Payload) -> Result<HttpResponse, E
                 }
 
                 Ok(AggregatedMessage::Binary(bin)) => {
+                    debug!("writing {}B to serial", bin.len());
                     serial_writer.write(&bin).unwrap();
+                    serial_writer.flush().unwrap();
                 }
 
                 Ok(AggregatedMessage::Ping(msg)) => {

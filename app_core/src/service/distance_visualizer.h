@@ -54,7 +54,7 @@ private:
 
     VL53L8CX_Configuration _devices[CONF_N_SENSORS]{};
     VL53L8CX_ResultsData _results[CONF_N_SENSORS]{};
-    bool _data_ready = false;
+    rtos::Semaphore _data_ready {};
     se_oss::Logger _log;
     DistanceMap& _distance_map;
 };
