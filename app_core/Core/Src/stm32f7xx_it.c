@@ -43,8 +43,10 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
-#define UART2_RX_BLOCK_SIZE 128
-uint8_t dma_rx_buffer[UART2_RX_BLOCK_SIZE];
+#define COMMAND_RX_BLOCK_SIZE 128
+uint8_t command_rx_buffer[COMMAND_RX_BLOCK_SIZE];
+// #define COMMAND_UART  huart2
+#define COMMAND_UART  huart6
 
 extern TIM_HandleTypeDef htim9;
 /* USER CODE END PV */
@@ -61,7 +63,9 @@ void safeShutdown(void);
 
 /* External variables --------------------------------------------------------*/
 extern DMA_HandleTypeDef hdma_usart2_rx;
+extern DMA_HandleTypeDef hdma_usart6_rx;
 extern UART_HandleTypeDef huart2;
+extern UART_HandleTypeDef huart6;
 extern HCD_HandleTypeDef hhcd_USB_OTG_FS;
 extern HCD_HandleTypeDef hhcd_USB_OTG_HS;
 extern TIM_HandleTypeDef htim1;
@@ -226,6 +230,20 @@ void EXTI15_10_IRQHandler(void)
 }
 
 /**
+  * @brief This function handles DMA2 stream1 global interrupt.
+  */
+void DMA2_Stream1_IRQHandler(void)
+{
+  /* USER CODE BEGIN DMA2_Stream1_IRQn 0 */
+
+  /* USER CODE END DMA2_Stream1_IRQn 0 */
+  HAL_DMA_IRQHandler(&hdma_usart6_rx);
+  /* USER CODE BEGIN DMA2_Stream1_IRQn 1 */
+
+  /* USER CODE END DMA2_Stream1_IRQn 1 */
+}
+
+/**
   * @brief This function handles USB On The Go FS global interrupt.
   */
 void OTG_FS_IRQHandler(void)
@@ -237,6 +255,20 @@ void OTG_FS_IRQHandler(void)
   /* USER CODE BEGIN OTG_FS_IRQn 1 */
 
   /* USER CODE END OTG_FS_IRQn 1 */
+}
+
+/**
+  * @brief This function handles USART6 global interrupt.
+  */
+void USART6_IRQHandler(void)
+{
+  /* USER CODE BEGIN USART6_IRQn 0 */
+
+  /* USER CODE END USART6_IRQn 0 */
+  HAL_UART_IRQHandler(&huart6);
+  /* USER CODE BEGIN USART6_IRQn 1 */
+
+  /* USER CODE END USART6_IRQn 1 */
 }
 
 /**
@@ -254,24 +286,24 @@ void OTG_HS_IRQHandler(void)
 }
 
 /* USER CODE BEGIN 1 */
-void UART2_Start_RX_DMA(void) {
+void CommandHandler_Start_RX_DMA(void) {
     // Start DMA reception into the current buffer
-    HAL_UARTEx_ReceiveToIdle_DMA(&huart2, dma_rx_buffer,
-                                 UART2_RX_BLOCK_SIZE);
+    HAL_UARTEx_ReceiveToIdle_DMA(&COMMAND_UART, command_rx_buffer,
+                                 COMMAND_RX_BLOCK_SIZE);
 }
 
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t size)
 {
-    if (huart == &huart2) {
-        RESIN_DataReceivedCallback(dma_rx_buffer, size);
-        UART2_Start_RX_DMA();
+    if (huart == &COMMAND_UART) {
+        RESIN_DataReceivedCallback(command_rx_buffer, size);
+        CommandHandler_Start_RX_DMA();
     }
 }
 
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 {
-    if (huart == &huart2) {
-        UART2_Start_RX_DMA();
+    if (huart == &COMMAND_UART) {
+        CommandHandler_Start_RX_DMA();
     }
 }
 

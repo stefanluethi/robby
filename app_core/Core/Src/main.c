@@ -78,6 +78,7 @@ UART_HandleTypeDef huart7;
 UART_HandleTypeDef huart2;
 UART_HandleTypeDef huart6;
 DMA_HandleTypeDef hdma_usart2_rx;
+DMA_HandleTypeDef hdma_usart6_rx;
 
 HCD_HandleTypeDef hhcd_USB_OTG_FS;
 HCD_HandleTypeDef hhcd_USB_OTG_HS;
@@ -190,7 +191,7 @@ int main(void)
     // uint8_t soc = 0U;
     // res = fuelgauge_get_soc(&soc);
     HAL_TIM_PWM_Start(&htim9, TIM_CHANNEL_1);
-    UART2_Start_RX_DMA();
+    CommandHandler_Start_RX_DMA();
     RESIN_launch_app();
 
   /* USER CODE END 2 */
@@ -1238,11 +1239,15 @@ static void MX_DMA_Init(void)
 
   /* DMA controller clock enable */
   __HAL_RCC_DMA1_CLK_ENABLE();
+  __HAL_RCC_DMA2_CLK_ENABLE();
 
   /* DMA interrupt init */
   /* DMA1_Stream5_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Stream5_IRQn, 6, 0);
   HAL_NVIC_EnableIRQ(DMA1_Stream5_IRQn);
+  /* DMA2_Stream1_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA2_Stream1_IRQn, 6, 0);
+  HAL_NVIC_EnableIRQ(DMA2_Stream1_IRQn);
 
 }
 
