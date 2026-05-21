@@ -4,6 +4,7 @@
 #include "stm32f7xx_hal.h"
 
 #include <cbor.h>
+#include <cobs.h>
 #include <cstdint>
 #include <cstring>
 #include <utility>
@@ -15,24 +16,89 @@ using namespace robby;
 CommandHandler::CommandHandler(se_oss::Logger log) :
     _log{std::move(log)}
 {
-
+    reset_cobs_decoder();
 }
 
 void CommandHandler::data_received_callback(void* data, std::size_t length)
 {
-    if (data == nullptr || length == 0 || length > MAX_MESSAGE_LENGTH - 1) {
+    if (data == nullptr || length == 0 || length > MAX_RX_CHUNK_LENGTH) {
         return;
     }
 
-    _message_buffer_irq[0] = static_cast<uint8_t>(length);
-    std::memcpy(_message_buffer_irq + 1, data, length);
-    _queue.send(_message_buffer_irq);
+    _rx_chunk_irq.length = length;
+    std::memcpy(_rx_chunk_irq.bytes.data(), data, length);
+    _queue.trySend(_rx_chunk_irq);
 }
 
 void CommandHandler::process()
 {
-    _queue.receive(_message_buffer_proc);
-    try_parse_motor_command(&_message_buffer_proc[1], _message_buffer_proc[0]);
+    _queue.receive(_rx_chunk_proc);
+    decode_received_bytes(_rx_chunk_proc.bytes.data(), _rx_chunk_proc.length);
+}
+
+void CommandHandler::reset_cobs_decoder()
+{
+    _message_length = 0;
+
+    if (cobs_decode_inc_begin(&_cobs_decode_ctx) != COBS_RET_SUCCESS) {
+        LOG_WARN(_log, "cobs_decode_inc_begin failed");
+    }
+}
+
+void CommandHandler::decode_received_bytes(const uint8_t* data, std::size_t length)
+{
+    std::size_t consumed_total = 0;
+
+    while (consumed_total < length) {
+        cobs_decode_inc_args_t args {};
+        args.enc_src = data + consumed_total;
+        args.dec_dst = _message_buffer.data() + _message_length;
+        args.enc_src_max = length - consumed_total;
+        args.dec_dst_max = _message_buffer.size() - _message_length;
+
+        std::size_t consumed_now = 0;
+        std::size_t decoded_now = 0;
+        bool message_complete = false;
+
+        const auto ret = cobs_decode_inc(
+            &_cobs_decode_ctx,
+            &args,
+            &consumed_now,
+            &decoded_now,
+            &message_complete
+        );
+
+        consumed_total += consumed_now;
+        _message_length += decoded_now;
+
+        if (ret != COBS_RET_SUCCESS) {
+            // LOG_WARN(_log, "COBS decode failed: %d", static_cast<int>(ret));
+            reset_cobs_decoder();
+
+            if (consumed_now == 0) {
+                consumed_total++;
+            }
+
+            continue;
+        }
+
+        if (message_complete) {
+            try_parse_motor_command(_message_buffer.data(), _message_length);
+            reset_cobs_decoder();
+            continue;
+        }
+
+        if (_message_length >= _message_buffer.size()) {
+            LOG_WARN(_log, "COBS decoded message too large");
+            reset_cobs_decoder();
+        }
+
+        if (consumed_now == 0 && decoded_now == 0) {
+            LOG_WARN(_log, "COBS decoder made no progress");
+            reset_cobs_decoder();
+            consumed_total++;
+        }
+    }
 }
 
 

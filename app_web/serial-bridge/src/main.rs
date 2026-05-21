@@ -12,11 +12,12 @@ use actix_web::{
 use futures_util::StreamExt;
 use actix_ws::{AggregatedMessage, Session};
 use log::debug;
+use serialport::SerialPortType::UsbPort;
 
 async fn robby(req: HttpRequest, stream: web::Payload) -> Result<HttpResponse, Error> {
     let (res, mut session, stream) = actix_ws::handle(&req, stream)?;
 
-    let port_result = serialport::new("/dev/ttyACM0", 1_000_000)
+    let port_result = serialport::new(find_stlink().expect("no STLink found"), 1_000_000)
         .timeout(Duration::from_millis(10))
         .open();
 
@@ -50,9 +51,9 @@ async fn robby(req: HttpRequest, stream: web::Payload) -> Result<HttpResponse, E
                 }
 
                 Ok(AggregatedMessage::Binary(bin)) => {
-                    debug!("writing {}B to serial", bin.len());
-                    serial_writer.write(&bin).unwrap();
-                    serial_writer.flush().unwrap();
+                    let encoded = cobs::encode_vec_including_sentinels(&bin.to_vec());
+                    debug!("writing {}B to serial: {}",bin.len(), hex_string::HexString::from_bytes(&encoded).as_string());
+                    serial_writer.write(&encoded).unwrap();
                 }
 
                 Ok(AggregatedMessage::Ping(msg)) => {
@@ -71,6 +72,20 @@ async fn robby(req: HttpRequest, stream: web::Payload) -> Result<HttpResponse, E
     Ok(res)
 }
 
+fn find_stlink() -> Option<String> {
+    let ports = serialport::available_ports().ok()?;
+
+    ports.into_iter().find_map(|port| {
+        if let UsbPort(usb_info) = &port.port_type {
+            if usb_info.manufacturer.as_deref()
+                .is_some_and(|m| m.to_lowercase().contains("stmicroelectronics"))
+            {
+                return Some(port.port_name);
+            }
+        }
+        None
+    })
+}
 
 async fn poll_serial(mut session: Session, mut port: Box<dyn serialport::SerialPort>) {
     let mut serial_buf: Vec<u8> = vec![0; 4_096];

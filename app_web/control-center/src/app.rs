@@ -117,10 +117,10 @@ impl State {
         false
     }
 
-    fn websocket_send(&mut self, command: proto::Command) {
+    fn websocket_send(&mut self, command: proto::Action) {
         if let Some(sender) = self.ws_sender.as_mut() {
             let command_packet = serde_cbor_2::to_vec(&command).unwrap();
-            log::info!("send command {}", hex_string::HexString::from_bytes(&command_packet).as_string());
+            log::debug!("send command {}", hex_string::HexString::from_bytes(&command_packet).as_string());
             sender.send(ewebsock::WsMessage::Binary(command_packet));
         }
     }
@@ -292,8 +292,8 @@ impl eframe::App for App {
         });
 
         let new_value = self.state.task_manager.value();
-        if new_value != old_value  {
-            self.state.websocket_send(proto::Command::SetMotorSpeed((new_value * 10.0_f32) as u16));
+        if new_value != old_value {
+            self.state.websocket_send(proto::Action::SetMotorSpeed((new_value * 10.0_f32) as u16));
         }
 
     }

@@ -43,8 +43,9 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
-#define COMMAND_RX_BLOCK_SIZE 128
+#define COMMAND_RX_BLOCK_SIZE 4096
 uint8_t command_rx_buffer[COMMAND_RX_BLOCK_SIZE];
+static uint16_t command_rx_last_pos = 0;
 // #define COMMAND_UART  huart2
 #define COMMAND_UART  huart6
 
@@ -286,8 +287,10 @@ void OTG_HS_IRQHandler(void)
 }
 
 /* USER CODE BEGIN 1 */
-void CommandHandler_Start_RX_DMA(void) {
-    // Start DMA reception into the current buffer
+void CommandHandler_Start_RX_DMA(void)
+{
+    command_rx_last_pos = 0;
+
     HAL_UARTEx_ReceiveToIdle_DMA(&COMMAND_UART, command_rx_buffer,
                                  COMMAND_RX_BLOCK_SIZE);
 }
@@ -295,8 +298,19 @@ void CommandHandler_Start_RX_DMA(void) {
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t size)
 {
     if (huart == &COMMAND_UART) {
-        RESIN_DataReceivedCallback(command_rx_buffer, size);
-        CommandHandler_Start_RX_DMA();
+        if (size > command_rx_last_pos) {
+            RESIN_DataReceivedCallback(&command_rx_buffer[command_rx_last_pos],
+                                       size - command_rx_last_pos);
+        } else if (size < command_rx_last_pos) {
+            RESIN_DataReceivedCallback(&command_rx_buffer[command_rx_last_pos],
+                                       COMMAND_RX_BLOCK_SIZE - command_rx_last_pos);
+
+            if (size > 0) {
+                RESIN_DataReceivedCallback(command_rx_buffer, size);
+            }
+        }
+
+        command_rx_last_pos = size;
     }
 }
 

@@ -5,10 +5,11 @@ edition = "2024"
 
 [dependencies]
 serialport = { version = "4.7.3", default-features = false }  # libudev issue on arch
-cobs = "0.4.0"
+cobs = "0.5.1"
 log = "0.4.29"
 simple_logger = "5.2.0"
 
 actix-web = "4.13.0"
 actix-ws = "0.4.0"
 futures-util = "0.3.32"
+hex-string = "0.1.0"

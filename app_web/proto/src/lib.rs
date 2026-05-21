@@ -73,6 +73,6 @@ pub struct Message {
 
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
-pub enum Command {
+pub enum Action {
     SetMotorSpeed(u16),
 }
