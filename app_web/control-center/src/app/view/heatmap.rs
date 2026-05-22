@@ -31,6 +31,7 @@ impl Viewable for Heatmap {
                 let color = map_distance_color(distance).unwrap_or(ui.visuals().panel_fill);
                 let top_left = remainder.left_top() + egui::vec2(rect_size * x as f32, rect_size * y as f32); 
                 let bottom_right = remainder.left_top() + egui::vec2(rect_size * (x + 1) as f32, rect_size * (y + 1) as f32);
+                // colored box
                 ui.painter().rect_filled(
                     egui::Rect {
                         min: top_left,
@@ -39,6 +40,11 @@ impl Viewable for Heatmap {
                     0.0,
                     color,
                 );
+
+                // value
+                if rect_size < 35.0 {
+                    continue;
+                }
                 if distance != u16::MAX {
                     let text_color = if color.intensity() < 0.5 {
                         egui::Color32::WHITE
