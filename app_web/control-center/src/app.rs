@@ -8,33 +8,6 @@ use egui::Context;
 use view::Viewable;
 
 #[derive(serde::Deserialize, serde::Serialize)]
-enum Pane {
-    Plots,
-    AppLogs,
-    TargetLogs,
-    TaskManager,
-    RoomView,
-}
-
-impl From<&Pane> for &str {
-    fn from(value: &Pane) -> Self {
-        match value {
-            Pane::Plots => "Plots",
-            Pane::AppLogs => "App Logs",
-            Pane::TargetLogs => "Target Logs",
-            Pane::TaskManager => "Task Manager",
-            Pane::RoomView => "Room View",
-        }
-    }
-}
-
-impl From<&mut Pane> for &str {
-    fn from(value: &mut Pane) -> Self {
-        (value as &Pane).into()
-    }
-}
-
-#[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct State {
     stream_view: view::plot::Plot,
@@ -149,6 +122,37 @@ impl State {
     }
 }
 
+
+
+//--------------------------------------------------------------------------------------------------
+
+#[derive(serde::Deserialize, serde::Serialize)]
+enum Pane {
+    Plots,
+    AppLogs,
+    TargetLogs,
+    TaskManager,
+    RoomView,
+}
+
+impl From<&Pane> for &str {
+    fn from(value: &Pane) -> Self {
+        match value {
+            Pane::Plots => "Data Streams",
+            Pane::AppLogs => "App Logs",
+            Pane::TargetLogs => "Target Logs",
+            Pane::TaskManager => "Task Manager",
+            Pane::RoomView => "Room View",
+        }
+    }
+}
+
+impl From<&mut Pane> for &str {
+    fn from(value: &mut Pane) -> Self {
+        (value as &Pane).into()
+    }
+}
+
 impl egui_tiles::Behavior<Pane> for State {
     fn pane_ui(
         &mut self,
@@ -159,13 +163,22 @@ impl egui_tiles::Behavior<Pane> for State {
         let title: &str = pane.into();
         let mut drag_response = egui_tiles::UiResponse::None;
 
-        let title_bar_response = ui
-            .horizontal(|ui| {
-                ui.add_space(4.0);
-                ui.strong(title);
-                ui.allocate_space(ui.available_size())
+        let title_bar_color = if ui.visuals().dark_mode {
+            ui.visuals().extreme_bg_color
+        } else {
+            ui.visuals().widgets.inactive.bg_fill
+        };
+        let title_bar_response = egui::Frame::NONE
+            .fill(title_bar_color)
+            .inner_margin(egui::Margin::symmetric(8, 3))
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.strong(title);
+                    ui.allocate_space(ui.available_size())
+                })
+                    .response
             })
-            .response;
+            .inner;
 
         if title_bar_response
             .interact(egui::Sense::click_and_drag())
@@ -174,31 +187,35 @@ impl egui_tiles::Behavior<Pane> for State {
             drag_response = egui_tiles::UiResponse::DragStarted;
         }
 
-        match pane {
-            Pane::Plots => {
-                self.stream_view.view(ui, &mut self.model);
-            }
-            Pane::AppLogs => {
-                egui_logger::logger_ui()
-                    // .enable_category("robby_control_center::app", true)
-                    // .enable_category("robby_control_center::app::proto_parser", true)
-                    // .enable_category("robby_control_center::app::model::streams", true)
-                    .include_target(false)
-                    .show(ui);
-            }
-            Pane::TargetLogs => {
-                egui_logger::logger_ui()
-                    // .enable_category("robby", true)
-                    .include_target(false)
-                    .show(ui);
-            }
-            Pane::TaskManager => {
-                self.task_manager.view(ui, &mut self.model);
-            }
-            Pane::RoomView => {
-                self.room_view.view(ui, &mut self.model);
-            }
-        }
+        egui::Frame::NONE
+            .inner_margin(egui::Margin::same(10))
+            .show(ui, |ui| {
+                match pane {
+                    Pane::Plots => {
+                        self.stream_view.view(ui, &mut self.model);
+                    }
+                    Pane::AppLogs => {
+                        egui_logger::logger_ui()
+                            // .enable_category("robby_control_center::app", true)
+                            // .enable_category("robby_control_center::app::proto_parser", true)
+                            // .enable_category("robby_control_center::app::model::streams", true)
+                            .include_target(false)
+                            .show(ui);
+                    }
+                    Pane::TargetLogs => {
+                        egui_logger::logger_ui()
+                            // .enable_category("robby", true)
+                            .include_target(false)
+                            .show(ui);
+                    }
+                    Pane::TaskManager => {
+                        self.task_manager.view(ui, &mut self.model);
+                    }
+                    Pane::RoomView => {
+                        self.room_view.view(ui, &mut self.model);
+                    }
+                }
+            });
 
         drag_response
     }
@@ -212,14 +229,14 @@ impl egui_tiles::Behavior<Pane> for State {
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct App {
     state: State,
-    tree: egui_tiles::Tree<Pane>,
+    pane_tree: egui_tiles::Tree<Pane>,
 }
 
 impl Default for App {
     fn default() -> Self {
         Self {
             state: Default::default(),
-            tree: App::create_tree(),
+            pane_tree: App::create_tree(),
         }
     }
 }
@@ -232,7 +249,12 @@ impl App {
         let target_logs = tiles.insert_pane(Pane::TargetLogs);
         let task_manager = tiles.insert_pane(Pane::TaskManager);
         let room_view = tiles.insert_pane(Pane::RoomView);
-        let root = tiles.insert_horizontal_tile(vec![plots, app_logs, target_logs, task_manager, room_view]);
+
+        let view_n_task_manager = tiles.insert_horizontal_tile(vec![room_view, task_manager]);
+        let plots_n_view = tiles.insert_vertical_tile(vec![plots, view_n_task_manager]);
+        let logs = tiles.insert_tab_tile(vec![app_logs, target_logs]);
+        let root = tiles.insert_horizontal_tile(vec![plots_n_view, logs]);
+
         egui_tiles::Tree::new("main_tree", root, tiles)
     }
 
@@ -251,14 +273,14 @@ impl App {
             Default::default()
         };
 
-        if app.tree.root.is_none() {
-            app.tree = App::create_tree();
+        if app.pane_tree.root.is_none() {
+            app.pane_tree = App::create_tree();
         }
 
         // renew tree if new panes have been added
-        //if !app.tree.inactive_tiles().is_empty() {
-        //    app.tree = App::create_tree();
-        //}
+        // if !app.pane_tree.inactive_tiles().is_empty() {
+        //    app.pane_tree = App::create_tree();
+        // }
 
         app
     }
@@ -287,8 +309,10 @@ impl eframe::App for App {
             });
         });
 
-        egui::CentralPanel::default().show_inside(ui, |ui| {
-            self.tree.ui(&mut self.state, ui);
+        egui::CentralPanel::default()
+            .frame(egui::Frame::central_panel(ui.style()).inner_margin(egui::Margin::ZERO))
+            .show_inside(ui, |ui| {
+            self.pane_tree.ui(&mut self.state, ui);
         });
 
         let new_value = self.state.task_manager.value();
