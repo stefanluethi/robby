@@ -22,6 +22,9 @@ pub struct State {
     ws_receiver: Option<ewebsock::WsReceiver>,
     #[serde(skip)]
     ws_sender: Option<ewebsock::WsSender>,
+
+    #[serde(skip)]
+    panes_in_tabs: std::collections::HashSet<egui_tiles::TileId>,
 }
 
 impl Default for State {
@@ -34,6 +37,7 @@ impl Default for State {
             model: model::Model::default(),
             ws_receiver: None,
             ws_sender: None,
+            panes_in_tabs: std::collections::HashSet::new(),
         }
     }
 }
@@ -163,28 +167,32 @@ impl egui_tiles::Behavior<Pane> for State {
         let title: &str = pane.into();
         let mut drag_response = egui_tiles::UiResponse::None;
 
-        let title_bar_color = if ui.visuals().dark_mode {
-            ui.visuals().extreme_bg_color
-        } else {
-            ui.visuals().widgets.inactive.bg_fill
-        };
-        let title_bar_response = egui::Frame::NONE
-            .fill(title_bar_color)
-            .inner_margin(egui::Margin::symmetric(8, 3))
-            .show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    ui.strong(title);
-                    ui.allocate_space(ui.available_size())
-                })
-                    .response
-            })
-            .inner;
+        let is_tab = self.panes_in_tabs.contains(&_tile_id);
 
-        if title_bar_response
-            .interact(egui::Sense::click_and_drag())
-            .dragged()
-        {
-            drag_response = egui_tiles::UiResponse::DragStarted;
+        if !is_tab {
+            let title_bar_color = if ui.visuals().dark_mode {
+                ui.visuals().extreme_bg_color
+            } else {
+                ui.visuals().widgets.inactive.bg_fill
+            };
+            let title_bar_response = egui::Frame::NONE
+                .fill(title_bar_color)
+                .inner_margin(egui::Margin::symmetric(8, 3))
+                .show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.strong(title);
+                        ui.allocate_space(ui.available_size())
+                    })
+                        .response
+                })
+                .inner;
+
+            if title_bar_response
+                .interact(egui::Sense::click_and_drag())
+                .dragged()
+            {
+                drag_response = egui_tiles::UiResponse::DragStarted;
+            }
         }
 
         egui::Frame::NONE
@@ -295,6 +303,17 @@ impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         // todo: find viable solution!!!
         let old_value = self.state.task_manager.value();
+
+        self.state.panes_in_tabs.clear();
+        for (_, tile) in self.pane_tree.tiles.iter() {
+            if let egui_tiles::Tile::Container(c) = tile {
+                if c.kind() == egui_tiles::ContainerKind::Tabs {
+                    for &child in c.children() {
+                        self.state.panes_in_tabs.insert(child);
+                    }
+                }
+            }
+        }
 
         egui::Panel::top("top panel").show_inside(ui, |ui| {
             ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
