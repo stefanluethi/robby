@@ -46,8 +46,8 @@
 #define COMMAND_RX_BLOCK_SIZE 4096
 uint8_t command_rx_buffer[COMMAND_RX_BLOCK_SIZE];
 static uint16_t command_rx_last_pos = 0;
-// #define COMMAND_UART  huart2
-#define COMMAND_UART  huart6
+#define COMMAND_UART  huart2
+// #define COMMAND_UART  huart6
 
 extern TIM_HandleTypeDef htim9;
 /* USER CODE END PV */

@@ -44,7 +44,7 @@ fn main() -> anyhow::Result<()> {
     let rx = peripherals.pins.gpio17;
     let config = config::Config::new()
         .baudrate(esp_idf_hal::units::Hertz(1_000_000))
-        .rx_fifo_size(2048);
+        .rx_fifo_size(8192);
     let mut uart = UartDriver::new(
         peripherals.uart1,
         tx,
@@ -99,54 +99,70 @@ fn main() -> anyhow::Result<()> {
             let mut buf = [0; MAX_RECEIVE_LEN]; // Small digit buffer can go on the stack
             ws.recv(buf.as_mut())?;
             info!("received {} bytes on ws -> forwarding to UART", len);
-            uart_tx_cell.lock().unwrap().write(&buf[..len]).ok();
+            
+            let mut enc_buf = [0; 256];
+            let enc_len = cobs::encode_including_sentinels(&buf[..len], &mut enc_buf);
+            enc_buf[enc_len] = 0x00; // Append sentinel
+            
+            uart_tx_cell.lock().unwrap().write(&enc_buf[..=enc_len]).ok();
         
             Ok::<(), EspError>(())
         });
     }
 
     let mut led_div_counter = 0_u16;
-    let mut buf = [0_u8; 2048];
-    let mut received_accumulated: usize = 0;
+    let mut buf = [0_u8; 4096];
+    let mut buf_len = 0;
+    let mut dec_buf = [0_u8; 2048];
+    
     loop {
         // receive on UART side
         while let Some((event, _)) = uart_rx.event_queue().unwrap().recv_front(0) {
-            // info!("uart event {:?}", event.payload());
             let evt = event.payload();
             match evt {
-                UartEventPayload::Data { size, timeout } => {
-                    received_accumulated += size;
-                    if timeout {
-                        info!("uart received {}B", received_accumulated);
-
-                        let result = uart_rx.read(&mut buf[..received_accumulated], 0);
-                        if let Ok(bytes_read) = result {
-                            info!("forwarding {}B from UART to websocket", bytes_read);
-                        }
-                        if buf[0] != 0xa1 {
-                            warn!("receiver out of sync, flushing");
-                            uart_rx.clear().ok();
-                            continue;
-                        }
-
-                        match (result, websocket_sender.try_lock()) {
-                            (Ok(bytes_read), Ok(mut socket)) => {
-                                if let Some(ws) = socket.as_mut() {
-                                    if ws
-                                        .send(FrameType::Binary(false), &buf[..bytes_read])
-                                        .is_err()
-                                    {
-                                        warn!("Failed to send message");
+                UartEventPayload::Data { size, .. } => {
+                    let available_space = buf.len() - buf_len;
+                    let read_len = std::cmp::min(size, available_space);
+                    
+                    if let Ok(bytes_read) = uart_rx.read(&mut buf[buf_len..buf_len + read_len], 0) {
+                        buf_len += bytes_read;
+                        
+                        let mut start_idx = 0;
+                        while let Some(pos) = buf[start_idx..buf_len].iter().position(|&b| b == 0x00) {
+                            let end_idx = start_idx + pos;
+                            let frame = &buf[start_idx..=end_idx];
+                            if frame.len() > 1 {
+                                if let Ok(report) = cobs::decode(frame, &mut dec_buf) {
+                                    info!("decoded {}B frame, forwarding to websocket", report.frame_size());
+                                    if let Ok(mut socket) = websocket_sender.try_lock() {
+                                        if let Some(ws) = socket.as_mut() {
+                                            if ws.send(FrameType::Binary(false), &dec_buf[..report.frame_size()]).is_err() {
+                                                warn!("Failed to send message to websocket");
+                                            }
+                                        }
                                     }
+                                } else {
+                                    warn!("COBS decode failed for frame of size {}", frame.len());
                                 }
                             }
-                            (_, Err(_)) => warn!("websocket lock error"),
-                            (_, _) => (),
-                        };
-
-
-                        received_accumulated = 0;
+                            start_idx = end_idx + 1;
+                        }
+                        
+                        if start_idx > 0 {
+                            buf.copy_within(start_idx..buf_len, 0);
+                            buf_len -= start_idx;
+                        }
+                        
+                        if buf_len == buf.len() {
+                            warn!("UART buffer full, clearing");
+                            buf_len = 0;
+                        }
                     }
+                }
+                UartEventPayload::RxFifoOverflow => {
+                    warn!("UART RX FIFO overflow");
+                    uart_rx.clear().ok();
+                    buf_len = 0;
                 }
                 _ => (),
             };
@@ -181,7 +197,7 @@ fn create_server(modem: esp_idf_hal::modem::Modem) -> anyhow::Result<EspHttpServ
         esp_idf_svc::netif::EspNetif::new_with_conf(&esp_idf_svc::netif::NetifConfiguration {
             ip_configuration: Some(esp_idf_svc::ipv4::Configuration::Client(esp_idf_svc::ipv4::ClientConfiguration::DHCP(
                 esp_idf_svc::ipv4::DHCPClientSettings {
-                    hostname: Some("esp-tap".try_into().unwrap()),
+                    hostname: Some("proto-bridge".try_into().unwrap()),
                 },
             ))),
             ..esp_idf_svc::netif::NetifConfiguration::wifi_default_client()
@@ -192,9 +208,9 @@ fn create_server(modem: esp_idf_hal::modem::Modem) -> anyhow::Result<EspHttpServ
     let mut wifi = BlockingWifi::wrap(wifi, sys_loop)?;
 
     let wifi_configuration = wifi::Configuration::Client(wifi::ClientConfiguration {
-        ssid: WIFI_SSID.try_into().unwrap(),
+        ssid: WIFI_SSID.try_into()?,
         auth_method: AuthMethod::WPA2Personal,
-        password: WIFI_PASSWORD.try_into().unwrap(),
+        password: WIFI_PASSWORD.try_into()?,
         ..Default::default()
     });
 

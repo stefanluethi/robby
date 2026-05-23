@@ -1,5 +1,5 @@
 [package]
-name = "esp-tap"
+name = "proto-bride"
 version = "0.1.0"
 authors = ["Stefan Lüthi <stefan.luethi@outlook.com>"]
 edition = "2021"
@@ -7,7 +7,7 @@ resolver = "2"
 rust-version = "1.77"
 
 [[bin]]
-name = "esp-tap"
+name = "proto-bride"
 harness = false # do not use the built-in cargo test harness -> resolve rust-analyzer errors
 
 [profile.release]
@@ -31,6 +31,7 @@ anyhow = "1"
 serde = { version = "1.0", default-features = false }
 postcard = { version = "1.1", features = ["alloc"] }
 proto = { version = "*", path = "../app_web/proto" }
+cobs = { version = "0.5.1", default-features = false }
 
 [build-dependencies]
 embuild = "0.33"

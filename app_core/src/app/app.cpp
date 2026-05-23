@@ -26,11 +26,14 @@ void App::launch()
 {
     // Drivers -----------------------------------------------------------------
     auto virtual_com_port = std::make_unique<se_oss::FilteredSink<util::CobsEnc<SerialDriver>>>(huart6);
-    auto& proto_sink = virtual_com_port->inner();
+    auto network_port = std::make_unique<se_oss::FilteredSink<util::CobsEnc<SerialDriver>>>(huart2);
+
+    auto& com_port = network_port;
+    auto& proto_sink = com_port->inner();
 
     // Utilities ---------------------------------------------------------------
     auto log_registry = std::make_unique<se_oss::LogRegistry<LogContextId, LogSinkId>>();
-    log_registry->attachSink(LogSinkId::SERIAL, std::move(virtual_com_port));
+    log_registry->attachSink(LogSinkId::SERIAL, std::move(com_port));
     // log_registry->getContext(LogContextId::COMMAND).setLogLevel(se_oss::LogLevel::OFF);
     // log_registry->getContext(LogContextId::SPACE_ACQUISITION).setLogLevel(se_oss::LogLevel::OFF);
 

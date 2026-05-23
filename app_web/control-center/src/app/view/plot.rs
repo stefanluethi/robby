@@ -74,27 +74,29 @@ impl Plot {
     }
 
     fn show_stream_selection(&mut self, model: &Model, ui: &mut egui::Ui) {
-        ui.vertical(|ui| {
-            ui.horizontal(|ui| {
-                ui.add(
-                    egui::DragValue::new(&mut self.number_of_plots)
-                        .speed(1.0)
-                        .range(1..=MAX_PLOT_COUNT),
-                );
-                ui.label("plots");
-            });
+        egui::Frame::default()
+            .fill(ui.visuals().faint_bg_color)
+            .corner_radius(4.0)
+            .inner_margin(egui::Margin::same(8))
+            .show(ui, |ui| {
+                ui.set_height(ui.available_height());
+                ui.vertical(|ui| {
+                    ui.set_width(100.0);
+                    ui.horizontal(|ui| {
+                        ui.add(
+                            egui::DragValue::new(&mut self.number_of_plots)
+                                .speed(1.0)
+                                .range(1..=MAX_PLOT_COUNT),
+                        );
+                        ui.label("plots");
+                    });
 
-            ui.add_space(10.0);
+                    ui.add_space(10.0);
 
-            ui.label("Streams:");
-            let active_selectors = &mut self.selected_streams[self.selected_plot];
+                    ui.label("Streams:");
+                    let active_selectors = &mut self.selected_streams[self.selected_plot];
 
-            egui::Frame::default()
-                .fill(ui.visuals().window_fill)
-                .stroke(egui::Stroke::new(1.0, ui.visuals().widgets.noninteractive.bg_stroke.color))
-                .corner_radius(4.0)
-                .inner_margin(egui::Margin::same(8))
-                .show(ui, |ui| {
+                    ui.set_width(ui.available_width());
                     ui.vertical(|ui| {
                         let mut streams = model.streams.iter().collect::<Vec<_>>();
                         streams.sort_by_key(|stream| stream.descriptor.id);
@@ -104,15 +106,16 @@ impl Plot {
                                 .entry(stream.descriptor.id)
                                 .or_insert(false);
                             let button_name = format!("{}: {}", stream.descriptor.id, stream.descriptor.name);
-                            if ui.add(
-                                egui::Button::new(button_name).selected(stream_selected)
+                            if ui.add_sized(
+                                egui::Vec2::new(ui.available_width(), 20.0),
+                                egui::Button::new(button_name).selected(stream_selected),
                             ).clicked() {
                                 *active_selectors.get_mut(&stream.descriptor.id).unwrap() = !stream_selected;
                             }
                         }
                     });
                 });
-        });
+            });
     }
 
     fn plot_stream_series(&self, stream: &Stream, plot_ui: &mut egui_plot::PlotUi<'_>) {
@@ -156,7 +159,7 @@ impl Plot {
 
     fn calculate_plot_height(&mut self, ui: &mut Ui) -> f32 {
         let plot_count = self.number_of_plots as f32;
-        let frame_stroke_width = 2.0;
+        let frame_stroke_width = 1.0;
         let frame_inner_margin = 4.0;
         let spacing_between_plots = ui.spacing().item_spacing.y * (plot_count - 1.0);
         let frame_vertical_overhead = plot_count * (2.0 * frame_stroke_width + 2.0 * frame_inner_margin);
@@ -188,12 +191,20 @@ impl Plot {
         link_group_id: egui::Id,
         link_x: egui::Vec2b,
     ) {
+        let stroke = if self.selected_plot == index {
+            egui::Stroke::new(1.0, ui.visuals().widgets.active.bg_fill)
+        } else {
+            egui::Stroke::new(1.0, ui.visuals().window_fill())
+        };
+        let fille = if self.selected_plot == index {
+            ui.visuals().faint_bg_color
+        } else {
+            ui.visuals().window_fill()
+        };
+
         let frame = egui::Frame::default()
-            .stroke(if self.selected_plot == index {
-                egui::Stroke::new(2.0, ui.visuals().widgets.active.bg_fill)
-            } else {
-                egui::Stroke::new(2.0, ui.visuals().window_fill())
-            })
+            .stroke(stroke)
+            .fill(fille)
             .corner_radius(4.0)
             .inner_margin(egui::Margin::same(4));
 
