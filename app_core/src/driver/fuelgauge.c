@@ -5,9 +5,10 @@ extern I2C_HandleTypeDef hi2c2;
 
 #define BQ28Z620_I2C_ADDR (0x55 << 1)
 #define CMD_CURRENT 0x0A
-#define CMD_RELATIVE_STATE_OF_CHARGE 0x0D
-#define CMD_CELL2_VOLTAGE 0x3E
-#define CMD_CELL1_VOLTAGE 0x3F
+#define CMD_RELATIVE_STATE_OF_CHARGE 0x2C
+#define CMD_VOLTAGE 0x08
+#define MAC_BLOCK_ACCESS 0x44
+#define SUBCMD_DASTATUS1 0x0071
 
 #define I2C_TIMEOUT 1000
 
@@ -29,8 +30,12 @@ static bool fuelgauge_read_reg16(uint8_t reg, uint16_t *value) {
 }
 
 bool fuelgauge_init(void) {
-    /* Check if the device is ready and responding on the I2C bus */
-    if (HAL_I2C_IsDeviceReady(&hi2c2, BQ28Z620_I2C_ADDR, 2, I2C_TIMEOUT) == HAL_OK) {
+    /* Check if the device is ready and responding on the I2C bus.
+     * BQ28Z620 and similar smart gauges often NACK an address-only ping
+     * from HAL_I2C_IsDeviceReady, so we read a register instead.
+     */
+    uint16_t dummy = 0;
+    if (fuelgauge_read_reg16(CMD_VOLTAGE, &dummy)) {
         return true;
     }
     return false;
@@ -67,12 +72,40 @@ bool fuelgauge_get_current(int16_t *current) {
     return false;
 }
 
+static bool fuelgauge_read_dastatus1(uint16_t *cell1, uint16_t *cell2) {
+    // SMBus Block Write format requires the Byte Count after the Command.
+    // HAL_I2C_Mem_Write sends: [MemAddress] -> [Data...]
+    // For command 0x44, Data[0] must be the Byte Count (2), then the 2-byte sub-command.
+    uint8_t write_buf[3] = { 0x02, SUBCMD_DASTATUS1 & 0xFF, (SUBCMD_DASTATUS1 >> 8) & 0xFF };
+    uint8_t read_buf[7];
+    
+    if (HAL_I2C_Mem_Write(&hi2c2, BQ28Z620_I2C_ADDR, MAC_BLOCK_ACCESS, I2C_MEMADD_SIZE_8BIT, write_buf, 3, I2C_TIMEOUT) != HAL_OK) {
+        return false;
+    }
+    
+    if (HAL_I2C_Mem_Read(&hi2c2, BQ28Z620_I2C_ADDR, MAC_BLOCK_ACCESS, I2C_MEMADD_SIZE_8BIT, read_buf, 7, I2C_TIMEOUT) != HAL_OK) {
+        return false;
+    }
+    
+    if (read_buf[1] != (SUBCMD_DASTATUS1 & 0xFF) || read_buf[2] != ((SUBCMD_DASTATUS1 >> 8) & 0xFF)) {
+        return false;
+    }
+    
+    if (cell1) {
+        *cell1 = (uint16_t)(read_buf[3] | (read_buf[4] << 8));
+    }
+    if (cell2) {
+        *cell2 = (uint16_t)(read_buf[5] | (read_buf[6] << 8));
+    }
+    return true;
+}
+
 bool fuelgauge_get_cell1_voltage(uint16_t *voltage) {
     if (voltage == NULL) {
         return false;
     }
 
-    return fuelgauge_read_reg16(CMD_CELL1_VOLTAGE, voltage);
+    return fuelgauge_read_dastatus1(voltage, NULL);
 }
 
 bool fuelgauge_get_cell2_voltage(uint16_t *voltage) {
@@ -80,5 +113,5 @@ bool fuelgauge_get_cell2_voltage(uint16_t *voltage) {
         return false;
     }
 
-    return fuelgauge_read_reg16(CMD_CELL2_VOLTAGE, voltage);
+    return fuelgauge_read_dastatus1(NULL, voltage);
 }
