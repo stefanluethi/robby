@@ -1,13 +1,11 @@
 [build]
-target = "riscv32imac-esp-espidf"
+target = "riscv32imac-unknown-none-elf"
 
-[target.riscv32imac-esp-espidf]
-linker = "ldproxy"
-runner = "espflash flash --bootloader target/riscv32imac-esp-espidf/release/bootloader.bin --monitor"
-rustflags = [ "--cfg",  "espidf_time64"]
+[target.riscv32imac-unknown-none-elf]
+runner = "espflash flash --monitor"
 
 [unstable]
-build-std = ["std", "panic_abort"]
+build-std = ["core", "alloc"]
 
 [env]
 MCU="esp32c6"
