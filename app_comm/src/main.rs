@@ -4,7 +4,6 @@
 extern crate alloc;
 use alloc::string::String;
 use alloc::vec::Vec;
-use core::mem::MaybeUninit;
 
 use embassy_executor::Spawner;
 use embassy_net::{
@@ -12,46 +11,52 @@ use embassy_net::{
 };
 use embassy_time::{Duration, Timer};
 use embassy_sync::{
-    blocking_mutex::raw::NoopRawMutex,
+    blocking_mutex::raw::CriticalSectionRawMutex,
     channel::Channel,
 };
-use embedded_io_async::{Read, Write};
+use embedded_io_async::{Write};
 
 use esp_backtrace as _;
-use esp_println::println;
+use log::{debug, info, warn};
 
 use esp_hal::{
     clock::CpuClock,
     gpio::{Level, Output},
-    interrupt::software::SoftwareInterruptControl,
+    interrupt::{software::SoftwareInterruptControl, Priority},
     timer::timg::TimerGroup,
-    uart::{UartRx, UartTx, config::Config as UartConfig, Uart},
+    uart::{UartRx, UartTx, Config as UartConfig, Uart},
     Async,
 };
 
-const WIFI_SSID: &str = "robby";
-const WIFI_PASSWORD: &str = "robby1234";
+use esp_rtos::embassy::InterruptExecutor;
+use static_cell::StaticCell;
+
+esp_bootloader_esp_idf::esp_app_desc!();
+
+const WIFI_SSID: &str = env!("WIFI_SSID");
+const WIFI_PASSWORD: &str = env!("WIFI_PASSWORD");
 
 const MAX_RECEIVE_LEN: usize = 128;
 
-#[global_allocator]
-static ALLOCATOR: esp_alloc::EspHeap = esp_alloc::EspHeap::empty();
-
 fn init_heap() {
-    const HEAP_SIZE: usize = 32 * 1024;
-    static mut HEAP: [MaybeUninit<u8>; HEAP_SIZE] = [MaybeUninit::uninit(); HEAP_SIZE];
+    const HEAP_SIZE: usize = 64 * 1024;
+    static mut HEAP: [core::mem::MaybeUninit<u8>; HEAP_SIZE] = [core::mem::MaybeUninit::uninit(); HEAP_SIZE];
 
     unsafe {
-        ALLOCATOR.init(HEAP.as_mut_ptr() as *mut u8, HEAP_SIZE);
+        esp_alloc::HEAP.add_region(esp_alloc::HeapRegion::new(
+            (&raw mut HEAP) as *mut u8,
+            HEAP_SIZE,
+            esp_alloc::MemoryCapability::Internal.into(),
+        ));
     }
 }
 
 // Channel to send messages from UART to WS
-static UART_TO_WS: Channel<NoopRawMutex, Vec<u8>, 4> = Channel::new();
+static UART_TO_WS: Channel<CriticalSectionRawMutex, Vec<u8>, 16> = Channel::new();
 // Channel to send messages from WS to UART
-static WS_TO_UART: Channel<NoopRawMutex, Vec<u8>, 4> = Channel::new();
+static WS_TO_UART: Channel<CriticalSectionRawMutex, Vec<u8>, 16> = Channel::new();
 
-#[esp_hal::main]
+#[esp_rtos::main]
 async fn main(spawner: Spawner) -> ! {
     init_heap();
     esp_println::logger::init_logger_from_env();
@@ -64,45 +69,46 @@ async fn main(spawner: Spawner) -> ! {
     
     esp_rtos::start(timg0.timer0, sw_int.software_interrupt0);
 
-    let mut led_conn = Output::new(peripherals.GPIO15, Level::High);
-    let mut rf_switch_power = Output::new(peripherals.GPIO3, Level::Low);
-    let mut rf_switch_external = Output::new(peripherals.GPIO14, Level::High);
+    let led_conn = Output::new(peripherals.GPIO15, Level::High, esp_hal::gpio::OutputConfig::default());
+    let mut rf_switch_power = Output::new(peripherals.GPIO3, Level::Low, esp_hal::gpio::OutputConfig::default());
+    let mut rf_switch_external = Output::new(peripherals.GPIO14, Level::High, esp_hal::gpio::OutputConfig::default());
 
     let _ = rf_switch_power.set_low();
     let _ = rf_switch_external.set_high();
-
-    let mut uart_config = UartConfig::default();
-    uart_config.baudrate = 1_000_000;
-    
-    let mut uart = Uart::new(peripherals.UART1, uart_config).unwrap()
-        .with_rx(peripherals.GPIO17)
-        .with_tx(peripherals.GPIO16)
-        .into_async();
-
-    let (uart_rx, uart_tx) = uart.split();
 
     let (controller, interfaces) = esp_radio::wifi::new(
         peripherals.WIFI, 
         Default::default(),
     ).unwrap();
 
-    let wifi = interfaces.sta;
+    // Started after the radio init, which masks interrupts long enough to overflow the UART FIFO.
+    // UART runs in a higher priority interrupt executor, so the network stack can't delay it
+    // long enough to overflow the HW FIFO
+    static UART_EXECUTOR: StaticCell<InterruptExecutor<1>> = StaticCell::new();
+    let uart_executor = UART_EXECUTOR.init(InterruptExecutor::new(sw_int.software_interrupt1));
+    let uart_spawner = uart_executor.start(Priority::Priority2);
+    uart_spawner.spawn(
+        uart_task(peripherals.UART1, peripherals.GPIO17, peripherals.GPIO16, led_conn).unwrap(),
+    );
+
+    let wifi = interfaces.station;
 
     let net_config = Config::dhcpv4(Default::default());
 
     let seed = 1234; 
-    static STACK: static_cell::StaticCell<Stack<esp_radio::wifi::WifiDevice>> = static_cell::StaticCell::new();
+    static STACK: static_cell::StaticCell<Stack<'static>> = static_cell::StaticCell::new();
     static RESOURCES: static_cell::StaticCell<StackResources<3>> = static_cell::StaticCell::new();
 
-    let stack = &*STACK.init(Stack::new(
+    let (stack, runner) = embassy_net::new(
         wifi,
         net_config,
         RESOURCES.init(StackResources::<3>::new()),
         seed,
-    ));
+    );
+    let stack = STACK.init(stack);
 
-    spawner.spawn(connection(controller)).ok();
-    spawner.spawn(net_task(stack)).ok();
+    spawner.spawn(connection(controller).unwrap());
+    spawner.spawn(net_task(runner).unwrap());
 
     loop {
         if stack.is_link_up() {
@@ -111,21 +117,16 @@ async fn main(spawner: Spawner) -> ! {
         Timer::after(Duration::from_millis(500)).await;
     }
 
-    println!("Waiting to get IP address...");
+    info!("Waiting to get IP address...");
     loop {
         if let Some(config) = stack.config_v4() {
-            println!("Got IP: {}", config.address);
+            info!("Got IP: {}", config.address);
             break;
         }
         Timer::after(Duration::from_millis(500)).await;
     }
 
-    let _ = led_conn.set_low();
-
-    spawner.spawn(ws_server_task(stack)).ok();
-    spawner.spawn(uart_rx_task(uart_rx, led_conn)).ok();
-    spawner.spawn(uart_tx_task(uart_tx)).ok();
-
+    spawner.spawn(ws_server_task(stack).unwrap());
     loop {
         Timer::after(Duration::from_secs(10)).await;
     }
@@ -133,55 +134,49 @@ async fn main(spawner: Spawner) -> ! {
 
 #[embassy_executor::task]
 async fn connection(mut controller: esp_radio::wifi::WifiController<'static>) {
-    loop {
-        match esp_radio::wifi::get_wifi_state() {
-            esp_radio::wifi::WifiState::StaConnected => {
-                controller.wait_for_event(esp_radio::wifi::WifiEvent::StaDisconnected).await;
-                Timer::after(Duration::from_millis(5000)).await
-            }
-            _ => {}
-        }
-        if !matches!(controller.is_started(), Ok(true)) {
-            let client_config = esp_radio::wifi::Configuration::Client(esp_radio::wifi::ClientConfiguration {
-                ssid: WIFI_SSID.try_into().unwrap(),
-                password: WIFI_PASSWORD.try_into().unwrap(),
-                ..Default::default()
-            });
-            controller.set_configuration(&client_config).unwrap();
-            controller.start().await.unwrap();
-            println!("Wifi started!");
-        }
+    let client_config = esp_radio::wifi::Config::Station(
+        esp_radio::wifi::sta::StationConfig::default()
+            .with_ssid(WIFI_SSID)
+            .with_password(String::from(WIFI_PASSWORD))
+    );
+    controller.set_config(&client_config).unwrap();
 
-        match controller.connect().await {
-            Ok(_) => println!("Wifi connected!"),
+    loop {
+        match controller.connect_async().await {
+            Ok(_) => {
+                info!("Wifi connected!");
+                // only reconnect once the connection is actually lost
+                let _ = controller.wait_for_disconnect_async().await;
+                warn!("Wifi disconnected");
+            }
             Err(e) => {
-                println!("Failed to connect to wifi: {:?}", e);
-                Timer::after(Duration::from_millis(5000)).await
+                warn!("Failed to connect to wifi: {:?}", e);
             }
         }
+        Timer::after(Duration::from_millis(5000)).await;
     }
 }
 
 #[embassy_executor::task]
-async fn net_task(stack: &'static Stack<esp_radio::wifi::WifiDevice<'static>>) {
-    stack.run().await
+async fn net_task(mut runner: embassy_net::Runner<'static, esp_radio::wifi::Interface<'static>>) {
+    runner.run().await
 }
 
 #[embassy_executor::task]
-async fn ws_server_task(stack: &'static Stack<esp_radio::wifi::WifiDevice<'static>>) {
+async fn ws_server_task(stack: &'static Stack<'static>) {
     let mut rx_buffer = [0; 4096];
     let mut tx_buffer = [0; 4096];
 
     loop {
-        let mut socket = TcpSocket::new(stack, &mut rx_buffer, &mut tx_buffer);
+        let mut socket = TcpSocket::new(*stack, &mut rx_buffer, &mut tx_buffer);
         socket.set_timeout(Some(embassy_time::Duration::from_secs(10)));
 
-        println!("Listening on TCP:80...");
+        info!("Listening on TCP:80...");
         if let Err(e) = socket.accept(80).await {
-            println!("Accept error: {:?}", e);
+            warn!("Accept error: {:?}", e);
             continue;
         }
-        println!("Connection from {:?}", socket.remote_endpoint());
+        info!("Connection from {:?}", socket.remote_endpoint());
 
         let mut buf = [0; 1024];
         let mut pos = 0;
@@ -201,41 +196,38 @@ async fn ws_server_task(stack: &'static Stack<esp_radio::wifi::WifiDevice<'stati
 
         let request = core::str::from_utf8(&buf[..pos]).unwrap_or("");
         if !request.starts_with("GET /ws/robby") {
+            warn!("Rejecting request: {:?}", request.lines().next());
             let _ = socket.write_all(b"HTTP/1.1 404 Not Found\r\n\r\n").await;
             socket.close();
             continue;
         }
-        
-        let mut key = "";
-        for line in request.lines() {
-            let lower = line.to_lowercase();
-            if lower.starts_with("sec-websocket-key:") {
-                key = line[18..].trim();
+
+        // pass all request headers so the upgrade request can be validated
+        let headers_iter = request
+            .lines()
+            .skip(1)
+            .filter_map(|line| line.split_once(':'))
+            .map(|(name, value)| (name.trim(), value.trim().as_bytes()));
+        let web_socket_context = match embedded_websocket::read_http_header(headers_iter) {
+            Ok(Some(ctx)) => ctx,
+            other => {
+                warn!("Invalid websocket upgrade request: {:?}", other.map(|_| ()));
+                let _ = socket.write_all(b"HTTP/1.1 400 Bad Request\r\n\r\n").await;
+                socket.close();
+                continue;
             }
-        }
-        
-        if key.is_empty() {
-            let _ = socket.write_all(b"HTTP/1.1 400 Bad Request\r\n\r\n").await;
+        };
+
+        let mut ws_server = embedded_websocket::WebSocketServer::new_server();
+        let mut response_buf = [0; 256];
+        let len = ws_server.server_accept(&web_socket_context.sec_websocket_key, None, &mut response_buf).unwrap();
+
+        if socket.write_all(&response_buf[..len]).await.is_err() {
             socket.close();
             continue;
         }
 
-        let accept_key = embedded_websocket::generate_accept_key(key);
-        
-        let mut response = String::new();
-        response.push_str("HTTP/1.1 101 Switching Protocols\r\n");
-        response.push_str("Upgrade: websocket\r\n");
-        response.push_str("Connection: Upgrade\r\n");
-        response.push_str("Sec-WebSocket-Accept: ");
-        response.push_str(&accept_key);
-        response.push_str("\r\n\r\n");
-
-        if socket.write_all(response.as_bytes()).await.is_err() {
-            socket.close();
-            continue;
-        }
-
-        println!("WebSocket session opened");
+        info!("WebSocket session opened");
 
         while let Ok(_) = UART_TO_WS.try_receive() {}
 
@@ -287,7 +279,7 @@ async fn ws_server_task(stack: &'static Stack<esp_radio::wifi::WifiDevice<'stati
                                     frame_buf[i] = buf[offset + i] ^ mask_key[i % 4];
                                 }
                                 
-                                println!("received {} bytes on ws -> forwarding to UART", payload_len);
+                                debug!("received {} bytes on ws -> forwarding to UART", payload_len);
                                 
                                 let mut to_send = Vec::new();
                                 to_send.extend_from_slice(&frame_buf[..payload_len]);
@@ -320,7 +312,7 @@ async fn ws_server_task(stack: &'static Stack<esp_radio::wifi::WifiDevice<'stati
                 embassy_futures::select::Either::Second(data) => {
                     let len = data.len();
                     let mut header = [0_u8; 4];
-                    let mut header_len = 0;
+                    let header_len;
                     
                     header[0] = 0x82; 
                     if len < 126 {
@@ -343,22 +335,46 @@ async fn ws_server_task(stack: &'static Stack<esp_radio::wifi::WifiDevice<'stati
             }
         }
         
-        println!("WebSocket session closed");
+        info!("WebSocket session closed");
         socket.close();
     }
 }
 
 #[embassy_executor::task]
-async fn uart_rx_task(mut uart_rx: UartRx<'static, Async>, mut led_conn: Output<'static>) {
+async fn uart_task(
+    uart: esp_hal::peripherals::UART1<'static>,
+    rx_pin: esp_hal::peripherals::GPIO17<'static>,
+    tx_pin: esp_hal::peripherals::GPIO16<'static>,
+    led_conn: Output<'static>,
+) {
+    // wake up early so the 128 byte HW FIFO doesn't overflow at 1 Mbaud
+    let uart_config = UartConfig::default()
+        .with_baudrate(1_000_000)
+        .with_rx(esp_hal::uart::RxConfig::default().with_fifo_full_threshold(32));
+
+    let uart = Uart::new(uart, uart_config)
+        .unwrap()
+        .with_rx(rx_pin)
+        .with_tx(tx_pin)
+        .into_async();
+    let (uart_rx, uart_tx) = uart.split();
+
+    embassy_futures::join::join(uart_rx_loop(uart_rx, led_conn), uart_tx_loop(uart_tx)).await;
+}
+
+async fn uart_rx_loop(mut uart_rx: UartRx<'static, Async>, mut led_conn: Output<'static>) {
     let mut buf = [0_u8; 4096];
     let mut dec_buf = [0_u8; 2048];
     let mut buf_len = 0;
-    
+    // false until a frame delimiter was seen, so a partially received frame (at startup or after
+    // an RX error) is dropped instead of being decoded
+    let mut synced = false;
+
     let mut led_div_counter = 0_u16;
 
     loop {
         let mut read_buf = [0_u8; 256];
-        match uart_rx.read(&mut read_buf).await {
+        match uart_rx.read_async(&mut read_buf).await {
             Ok(bytes_read) if bytes_read > 0 => {
                 let available_space = buf.len() - buf_len;
                 let read_len = core::cmp::min(bytes_read, available_space);
@@ -369,14 +385,16 @@ async fn uart_rx_task(mut uart_rx: UartRx<'static, Async>, mut led_conn: Output<
                 while let Some(pos) = buf[start_idx..buf_len].iter().position(|&b| b == 0x00) {
                     let end_idx = start_idx + pos;
                     let frame = &buf[start_idx..=end_idx];
-                    if frame.len() > 1 {
+                    if !synced {
+                        synced = true;
+                    } else if frame.len() > 1 {
                         if let Ok(report) = cobs::decode(frame, &mut dec_buf) {
-                            println!("decoded {}B frame, forwarding to websocket", report.frame_size());
+                            debug!("decoded {}B frame, forwarding to websocket", report.frame_size());
                             let mut to_send = Vec::new();
                             to_send.extend_from_slice(&dec_buf[..report.frame_size()]);
                             let _ = UART_TO_WS.try_send(to_send);
                         } else {
-                            println!("COBS decode failed for frame of size {}", frame.len());
+                            warn!("COBS decode failed for frame of size {}", frame.len());
                         }
                     }
                     start_idx = end_idx + 1;
@@ -388,11 +406,17 @@ async fn uart_rx_task(mut uart_rx: UartRx<'static, Async>, mut led_conn: Output<
                 }
                 
                 if buf_len == buf.len() {
-                    println!("UART buffer full, clearing");
+                    warn!("UART buffer full, clearing");
                     buf_len = 0;
+                    synced = false;
                 }
             }
-            _ => {}
+            Ok(_) => {}
+            Err(e) => {
+                warn!("UART RX error: {:?}, resyncing", e);
+                buf_len = 0;
+                synced = false;
+            }
         }
 
         if led_div_counter >= 10 {
@@ -404,15 +428,14 @@ async fn uart_rx_task(mut uart_rx: UartRx<'static, Async>, mut led_conn: Output<
     }
 }
 
-#[embassy_executor::task]
-async fn uart_tx_task(mut uart_tx: UartTx<'static, Async>) {
+async fn uart_tx_loop(mut uart_tx: UartTx<'static, Async>) {
     let mut enc_buf = [0; 256];
     loop {
         let payload = WS_TO_UART.receive().await;
         let enc_len = cobs::encode_including_sentinels(&payload, &mut enc_buf);
         enc_buf[enc_len] = 0x00; 
         
-        let _ = uart_tx.write_all(&enc_buf[..=enc_len]).await;
-        let _ = uart_tx.flush().await;
+        let _ = uart_tx.write_async(&enc_buf[..=enc_len]).await;
+        let _ = uart_tx.flush_async().await;
     }
 }

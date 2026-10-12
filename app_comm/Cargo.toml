@@ -23,23 +23,23 @@ experimental = []
 
 [dependencies]
 log = "0.4"
-anyhow = { version = "1.0", default-features = false }
-serde = { version = "1.0", default-features = false }
-proto = { version = "*", path = "../app_web/proto" }
 cobs = { version = "0.5.1", default-features = false }
 
-esp-hal = { version = "1.1.1", features = ["esp32c6", "unstable"] }
-esp-rtos = { version = "0.3.0", features = ["esp32c6", "esp-radio", "esp-alloc"] }
-esp-radio = { version = "0.18.0", features = ["esp32c6", "wifi", "esp-alloc"] }
+esp-hal = { version = "1.1.1", features = ["esp32c6", "unstable", "log-04"] }
+esp-rtos = { version = "0.3.0", features = ["esp32c6", "esp-radio", "esp-alloc", "embassy"] }
+esp-radio = { version = "0.18.0", features = ["esp32c6", "wifi", "esp-alloc", "log-04"] }
 esp-alloc = { version = "0.10.0" }
 esp-backtrace = { version = "0.19.0", features = ["esp32c6", "panic-handler", "println"] }
-esp-println = { version = "0.17.0", default-features = false, features = ["esp32c6", "uart"] }
+esp-println = { version = "0.17.0", features = ["esp32c6", "log-04"] }
 
 embassy-executor = { version = "0.10.0", features = [] }
 embassy-time = { version = "0.5.1", features = ["generic-queue-8"] }
-embassy-net = { version = "0.9.1", features = ["tcp", "dhcpv4", "medium-ethernet"] }
+embassy-net = { version = "0.9.1", features = ["tcp", "dhcpv4", "medium-ethernet", "log"] }
 embassy-sync = "0.8.0"
 
 embedded-websocket = { version = "0.9.5", default-features = false }
-embedded-io-async = "0.6.1"
+embedded-io-async = "0.7.0"
 heapless = "0.9"
+static_cell = "2.1.1"
+embassy-futures = "0.1.2"
+esp-bootloader-esp-idf = { version = "0.5.0", features = ["esp32c6", "log-04"] }
