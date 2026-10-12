@@ -3,14 +3,14 @@
 #include "custom_mems_conf.h"
 #include "lsm6dso.h"
 
-#include <cbor.h>
-#include <cobs.h>
-
 #include <stm32f7xx_hal.h>
+
+#include <utility>
 
 using namespace robby;
 
-Imu::Imu(rtos::MessageQueue<AccelerationFrame>& frames) :
+Imu::Imu(se_oss::Logger log, rtos::MessageQueue<AccelerationFrame>& frames) :
+    _log{std::move(log)},
     _frames{frames}
 {
     LSM6DSO_IO_t io_ctx;
@@ -25,103 +25,111 @@ Imu::Imu(rtos::MessageQueue<AccelerationFrame>& frames) :
 
     LSM6DSO_RegisterBusIO(&_driver, &io_ctx);
     LSM6DSO_Init(&_driver);
-
-    // example from
-    // https://github.com/STMicroelectronics/STMems_Standard_C_drivers/blob/master/lsm6dso_STdC/examples/lsm6dso_fifo.c
-    /* Restore default configuration */
-    lsm6dso_reset_set(&_driver.Ctx, PROPERTY_ENABLE);
-
-    uint8_t rst;
-    do {
-        lsm6dso_reset_get(&_driver.Ctx, &rst);
-    } while (rst);
-
-    /* Disable I3C interface */
-    lsm6dso_i3c_disable_set(&_driver.Ctx, LSM6DSO_I3C_DISABLE);
-    /* Enable Block Data Update */
-    lsm6dso_block_data_update_set(&_driver.Ctx, PROPERTY_ENABLE);
-    lsm6dso_xl_full_scale_set(&_driver.Ctx, LSM6DSO_2g);
-    lsm6dso_gy_full_scale_set(&_driver.Ctx, LSM6DSO_2000dps);
-    lsm6dso_fifo_watermark_set(&_driver.Ctx, 210);
-    lsm6dso_fifo_xl_batch_set(&_driver.Ctx, LSM6DSO_XL_BATCHED_AT_833Hz);
-    lsm6dso_fifo_gy_batch_set(&_driver.Ctx, LSM6DSO_GY_BATCHED_AT_833Hz);
-    /* Set FIFO mode to Stream mode (aka Continuous Mode) */
-    lsm6dso_fifo_mode_set(&_driver.Ctx, LSM6DSO_STREAM_MODE);
 }
 
 void Imu::start()
 {
+    configure();
+}
+
+bool Imu::configure()
+{
+    stmdev_ctx_t* ctx = &_driver.Ctx;
+
+    // example from
+    // https://github.com/STMicroelectronics/STMems_Standard_C_drivers/blob/master/lsm6dso_STdC/examples/lsm6dso_fifo.c
+    /* Restore default configuration */
+    lsm6dso_reset_set(ctx, PROPERTY_ENABLE);
+
+    uint8_t rst = 1U;
+    for (uint32_t i = 0; rst != 0U; ++i) {
+        if (i >= RESET_POLL_LIMIT || lsm6dso_reset_get(ctx, &rst) != 0) {
+            LOG_WARN(_log, "IMU reset failed");
+            return false;
+        }
+    }
+
+    int32_t ret = 0;
+    /* Disable I3C interface */
+    ret |= lsm6dso_i3c_disable_set(ctx, LSM6DSO_I3C_DISABLE);
+    /* Needed to read a FIFO word (tag and data) in one transfer */
+    ret |= lsm6dso_auto_increment_set(ctx, PROPERTY_ENABLE);
+    /* Enable Block Data Update */
+    ret |= lsm6dso_block_data_update_set(ctx, PROPERTY_ENABLE);
+    ret |= lsm6dso_xl_full_scale_set(ctx, LSM6DSO_2g);
+    ret |= lsm6dso_gy_full_scale_set(ctx, LSM6DSO_2000dps);
+    ret |= lsm6dso_fifo_xl_batch_set(ctx, LSM6DSO_XL_BATCHED_AT_833Hz);
+    // gyro samples are unused, keeping them out of the FIFO halves the I2C traffic
+    ret |= lsm6dso_fifo_gy_batch_set(ctx, LSM6DSO_GY_NOT_BATCHED);
+
+    /* Set FIFO mode to Stream mode (aka Continuous Mode) */
+    // written as a whole instead of lsm6dso_fifo_mode_set(), whose read-modify-write would keep
+    // corrupted batching bits
+    lsm6dso_fifo_ctrl4_t fifo_ctrl4 {};
+    fifo_ctrl4.fifo_mode = LSM6DSO_STREAM_MODE;
+    ret |= lsm6dso_write_reg(ctx, LSM6DSO_FIFO_CTRL4, reinterpret_cast<uint8_t*>(&fifo_ctrl4), 1);
+
     /* Set Output Data Rate */
-    lsm6dso_xl_data_rate_set(&_driver.Ctx, LSM6DSO_XL_ODR_833Hz);
-    lsm6dso_gy_data_rate_set(&_driver.Ctx, LSM6DSO_GY_ODR_833Hz);
+    ret |= lsm6dso_xl_data_rate_set(ctx, LSM6DSO_XL_ODR_833Hz);
+    ret |= lsm6dso_gy_data_rate_set(ctx, LSM6DSO_GY_ODR_833Hz);
+
+    // samples before the gap don't belong to the same frame
+    _num_samples = 0U;
+    _last_sample_tick = xTaskGetTickCount();
+
+    if (ret != 0) {
+        LOG_WARN(_log, "IMU configuration failed");
+        return false;
+    }
+    return true;
 }
 
 void Imu::process()
 {
-    std::size_t num_samples = 0;
+    uint16_t num_words = 0;
+    if (lsm6dso_fifo_data_level_get(&_driver.Ctx, &num_words) == 0 && num_words > 0) {
+        read_fifo(num_words);
+    }
 
-    uint8_t fifo_overrun = 0;
-    lsm6dso_fifo_ovr_flag_get(&_driver.Ctx, &fifo_overrun);
+    // FIFO_CTRL4 was observed being overwritten at runtime (most likely by a disturbed I2C
+    // transfer), which stops the FIFO for good. Recover by configuring the sensor from scratch.
+    if (xTaskGetTickCount() - _last_sample_tick > STALL_TIMEOUT_MS) {
+        uint8_t fifo_ctrl4 = 0;
+        lsm6dso_read_reg(&_driver.Ctx, LSM6DSO_FIFO_CTRL4, &fifo_ctrl4, 1);
+        LOG_WARN(
+            _log,
+            "No IMU samples for %u ms (FIFO level %u, FIFO_CTRL4 0x%02x), reconfiguring",
+            static_cast<unsigned>(STALL_TIMEOUT_MS),
+            static_cast<unsigned>(num_words),
+            static_cast<unsigned>(fifo_ctrl4)
+        );
+        configure();
+    }
+}
 
-    /* Read watermark flag */
-    uint8_t wmflag = 0;
-    lsm6dso_fifo_wtm_flag_get(&_driver.Ctx, &wmflag);
-
-    /* Read number of samples in FIFO */
-    uint16_t num_samples_available = 0;
-    lsm6dso_fifo_data_level_get(&_driver.Ctx, &num_samples_available);
-
-    if (wmflag == 0) {
-        if (num_samples_available == 0) {
-            // flush fifo if overrun, should not be necessary by device just stops
-            // measuring otherwise
-            lsm6dso_fifo_mode_set(&_driver.Ctx, LSM6DSO_BYPASS_MODE);
-            lsm6dso_fifo_mode_set(&_driver.Ctx, LSM6DSO_STREAM_MODE);
+void Imu::read_fifo(uint16_t num_words)
+{
+    for (uint16_t i = 0; i < num_words; i++) {
+        std::array<uint8_t, FIFO_WORD_SIZE> word {};
+        if (lsm6dso_read_reg(&_driver.Ctx, LSM6DSO_FIFO_DATA_OUT_TAG, word.data(), word.size()) != 0) {
+            return;
         }
 
-        return;
-    }
-
-    if (num_samples_available == 0) {
-        return;
-    }
-
-    for (uint16_t i = 0; i < num_samples_available && num_samples < _acceleration_frame.x.size(); i++) {
-        /* Read FIFO tag */
-        lsm6dso_fifo_tag_t reg_tag;
-        lsm6dso_fifo_sensor_tag_get(&_driver.Ctx, &reg_tag);
-
-        axis3bit16_t data_raw_acceleration;
-        axis3bit16_t data_raw_angular_rate;
-
-        switch (reg_tag) {
-            case LSM6DSO_XL_NC_TAG:
-                memset(data_raw_acceleration.u8bit, 0x00, 3 * sizeof(int16_t));
-                lsm6dso_fifo_out_raw_get(&_driver.Ctx, data_raw_acceleration.u8bit);
-                _acceleration_frame.x[num_samples] = data_raw_acceleration.i16bit[0];
-                _acceleration_frame.y[num_samples] = data_raw_acceleration.i16bit[1];
-                _acceleration_frame.z[num_samples] = data_raw_acceleration.i16bit[2];
-                num_samples++;
-                break;
-
-            case LSM6DSO_GYRO_NC_TAG:
-                memset(data_raw_angular_rate.u8bit, 0x00, 3 * sizeof(int16_t));
-                lsm6dso_fifo_out_raw_get(&_driver.Ctx, data_raw_angular_rate.u8bit);
-                // angular_rate_mdps[0] = lsm6dso_from_fs2000_to_mdps(data_raw_angular_rate.i16bit[0]);
-                // angular_rate_mdps[1] = lsm6dso_from_fs2000_to_mdps(data_raw_angular_rate.i16bit[1]);
-                // angular_rate_mdps[2] = lsm6dso_from_fs2000_to_mdps(data_raw_angular_rate.i16bit[2]);
-                break;
-
-            default:
-                /* Flush unused samples */
-                axis3bit16_t dummy;
-                memset(dummy.u8bit, 0x00, 3 * sizeof(int16_t));
-                lsm6dso_fifo_out_raw_get(&_driver.Ctx, dummy.u8bit);
-                break;
+        // tag is in the upper 5 bits, followed by the tag counter and parity
+        if ((word[0] >> 3U) != LSM6DSO_XL_NC_TAG) {
+            continue;
         }
-    }
 
-    if (!_frames.trySend(_acceleration_frame)) {
-        // message something
+        _acceleration_frame.x[_num_samples] = static_cast<int16_t>(word[1] | (word[2] << 8U));
+        _acceleration_frame.y[_num_samples] = static_cast<int16_t>(word[3] | (word[4] << 8U));
+        _acceleration_frame.z[_num_samples] = static_cast<int16_t>(word[5] | (word[6] << 8U));
+        _last_sample_tick = xTaskGetTickCount();
+
+        if (++_num_samples == _acceleration_frame.x.size()) {
+            _num_samples = 0U;
+            if (!_frames.trySend(_acceleration_frame)) {
+                // message something
+            }
+        }
     }
 }
