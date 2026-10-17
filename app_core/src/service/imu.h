@@ -9,9 +9,15 @@
 
 namespace robby {
 
+constexpr uint64_t ACCELERATION_SAMPLE_PERIOD_NS {1'000'000'000U / 833U};
+
 template<std::size_t N>
 struct Acceleration
 {
+    /// Uptime when the last sample was read
+    uint64_t timestamp_ns {};
+    /// Number of valid samples
+    std::size_t size {};
     std::array<int16_t, N> x {};
     std::array<int16_t, N> y {};
     std::array<int16_t, N> z {};

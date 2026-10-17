@@ -45,7 +45,9 @@ add_executable(
         src/service/data_publisher.cpp
         src/service/command_handler.cpp
         src/util/colormap.cpp
-        src/proto/serializer.cpp
+        src/trace/clock.cpp
+        src/trace/link.cpp
+        src/trace/log_sink.cpp
 )
 
 add_subdirectory(lib)
@@ -85,4 +87,5 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
         rtos_cpp
         se_oss::log
         nanocobs
+        sonde::sonde
 )

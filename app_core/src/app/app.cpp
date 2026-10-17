@@ -9,13 +9,16 @@
 #include "service/data_publisher.h"
 #include "service/distance_visualizer.h"
 #include "service/imu.h"
+#include "trace/clock.h"
+#include "trace/link.h"
+#include "trace/log_sink.h"
 
 #include <memory>
 
 #include <rtos/rtos.h>
 #include <se-oss/log/Log.h>
 #include <se-oss/log/LogRegistry.h>
-#include <se-oss/log/sink/ConsoleSink.h>
+#include <sonde/sonde.hpp>
 
 extern UART_HandleTypeDef huart2;
 extern UART_HandleTypeDef huart6;
@@ -25,15 +28,17 @@ using namespace robby;
 void App::launch()
 {
     // Drivers -----------------------------------------------------------------
-    auto virtual_com_port = std::make_unique<se_oss::FilteredSink<util::CobsEnc<SerialDriver>>>(huart6);
-    auto network_port = std::make_unique<se_oss::FilteredSink<util::CobsEnc<SerialDriver>>>(huart2);
-
-    auto& com_port = network_port;
-    auto& proto_sink = com_port->inner();
+    // huart2: ESP32 network bridge to blip, huart6: virtual COM port
+    auto link = std::make_unique<Link>(huart2);
 
     // Utilities ---------------------------------------------------------------
+    // traced by the data publisher task only, each batch goes out right away
+    auto trace_storage = std::make_unique<sonde::Storage<1024, 1>>();
+    auto tracer = std::make_unique<sonde::Tracer>(*trace_storage, *link, &uptime_ns);
+
     auto log_registry = std::make_unique<se_oss::LogRegistry<LogContextId, LogSinkId>>();
-    log_registry->attachSink(LogSinkId::SERIAL, std::move(com_port));
+    log_registry->setTimeProvider(&uptime_ns);
+    log_registry->attachSink(LogSinkId::SERIAL, std::make_unique<LogSink>(*tracer));
     // log_registry->getContext(LogContextId::COMMAND).setLogLevel(se_oss::LogLevel::OFF);
     // log_registry->getContext(LogContextId::SPACE_ACQUISITION).setLogLevel(se_oss::LogLevel::OFF);
 
@@ -42,7 +47,7 @@ void App::launch()
     auto* distance_map = new DistanceMap();
 
     // Services ----------------------------------------------------------------
-    auto* command_handler = new CommandHandler(log_registry->createLogger(LogContextId::COMMAND));
+    auto* command_handler = new CommandHandler(log_registry->createLogger(LogContextId::COMMAND), *link);
     g_uartDataReceived.register_callback([&](auto* data, auto length){
         command_handler->data_received_callback(data, length);
     });
@@ -59,7 +64,7 @@ void App::launch()
 
     auto data_publisher = std::make_unique<DataPublisher>(
         *log_registry,
-        proto_sink,
+        *tracer,
         *acceleration_frames,
         *distance_map
     );
@@ -102,7 +107,7 @@ void App::launch()
 
     auto data_publisher_thread = rtos::Task::build()
         .name("data_publisher")
-        .stackSize(2048)
+        .stackSize(4096)
         .priority(4)
         .spawn([&] {
                 while (true) {

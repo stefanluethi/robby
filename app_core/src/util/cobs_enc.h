@@ -1,6 +1,10 @@
 #pragma once
 
+#include <array>
+#include <utility>
+
 #include <cobs.h>
+#include <se-oss/log/sink/IWriter.h>
 
 namespace util {
 

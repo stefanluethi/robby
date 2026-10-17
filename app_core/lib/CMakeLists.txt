@@ -67,14 +67,24 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(tinycbor)
 
+## sonde #######################################################################
+# Tracing library of blip, https://github.com/stefanluethi/blip
+
+set(SONDE_FETCH_TINYCBOR OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+        blip
+        GIT_REPOSITORY https://github.com/stefanluethi/blip.git
+        GIT_TAG        78585d50c411a5993e1549321ebaa410070556f8
+        SOURCE_SUBDIR  sonde
+)
+FetchContent_MakeAvailable(blip)
+
 ## se-oss ######################################################################
 
 add_library(se_oss_log_conf INTERFACE)
 target_include_directories(se_oss_log_conf INTERFACE ${CMAKE_SOURCE_DIR}/src/conf/se-oss)
-target_link_libraries(se_oss_log_conf INTERFACE tinycbor)
 
 set(SE_OSS_COMPONENT_LOG ON CACHE BOOL "" FORCE)
-# set(SE_OSS_LOG_SUPPORT_CBOR ON CACHE BOOL "" FORCE)
 FetchContent_Declare(
         se-oss
         GIT_REPOSITORY https://github.com/sourceengineers/se-oss.git

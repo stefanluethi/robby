@@ -13,10 +13,31 @@ extern TIM_HandleTypeDef htim9;
 
 using namespace robby;
 
-CommandHandler::CommandHandler(se_oss::Logger log) :
-    _log{std::move(log)}
+namespace {
+
+bool find_text(const CborValue& map, const char* key, const char* text)
+{
+    CborValue value;
+    bool equals {false};
+    return cbor_value_map_find_value(&map, key, &value) == CborNoError && cbor_value_is_text_string(&value)
+        && cbor_value_text_string_equals(&value, text, &equals) == CborNoError && equals;
+}
+
+bool find_int(const CborValue& map, const char* key, int64_t& result)
+{
+    CborValue value;
+    return cbor_value_map_find_value(&map, key, &value) == CborNoError && cbor_value_is_integer(&value)
+        && cbor_value_get_int64_checked(&value, &result) == CborNoError;
+}
+
+}  // namespace
+
+CommandHandler::CommandHandler(se_oss::Logger log, Link& link) :
+    _log{std::move(log)},
+    _link{link}
 {
     reset_cobs_decoder();
+    encode_actions();
 }
 
 void CommandHandler::data_received_callback(void* data, std::size_t length)
@@ -32,8 +53,17 @@ void CommandHandler::data_received_callback(void* data, std::size_t length)
 
 void CommandHandler::process()
 {
-    _queue.receive(_rx_chunk_proc);
-    decode_received_bytes(_rx_chunk_proc.bytes.data(), _rx_chunk_proc.length);
+    if (_queue.tryReceive(_rx_chunk_proc, ANNOUNCE_INTERVAL_MS)) {
+        decode_received_bytes(_rx_chunk_proc.bytes.data(), _rx_chunk_proc.length);
+    }
+
+    uint32_t now_ticks = xTaskGetTickCount();
+    if (now_ticks - _last_announce_tick >= ANNOUNCE_INTERVAL_MS) {
+        _last_announce_tick = now_ticks;
+        if (_actions_length > 0U) {
+            _link.write(_actions.data(), _actions_length);
+        }
+    }
 }
 
 void CommandHandler::reset_cobs_decoder()
@@ -83,7 +113,7 @@ void CommandHandler::decode_received_bytes(const uint8_t* data, std::size_t leng
         }
 
         if (message_complete) {
-            try_parse_motor_command(_message_buffer.data(), _message_length);
+            handle_request(_message_buffer.data(), _message_length);
             reset_cobs_decoder();
             continue;
         }
@@ -102,77 +132,138 @@ void CommandHandler::decode_received_bytes(const uint8_t* data, std::size_t leng
 }
 
 
-/* Message: A1 6D 5365744D6F746F725370656564 F9 52A0
-   map(1) { "SetMotorSpeed" => float16(52.0) }        */
-bool CommandHandler::try_parse_motor_command(const uint8_t* message_raw, std::size_t length)
+/* proto: Request::Invoke
+   {"Invoke": {"id": 7, "path": "motor/speed", "args": {"speed": 500}}} */
+void CommandHandler::handle_request(const uint8_t* message_raw, std::size_t length)
 {
-    // todo: clean up this AI generated sample
     CborParser parser;
-    CborValue  map, val;
-    CborError  err;
+    CborValue request;
+    CborValue invocation;
+    CborValue args;
 
-    err = cbor_parser_init(message_raw, length, 0, &parser, &map);
-    if (err != CborNoError) {
-        LOG_WARN(_log, "cbor_parser_init: %s", cbor_error_string(err));
-        return false;
+    if (cbor_parser_init(message_raw, length, 0, &parser, &request) != CborNoError || !cbor_value_is_map(&request)
+        || cbor_value_map_find_value(&request, "Invoke", &invocation) != CborNoError
+        || !cbor_value_is_map(&invocation)) {
+        LOG_WARN(_log, "Unknown request");
+        return;
     }
 
-    if (!cbor_value_is_map(&map)) {
-        LOG_WARN(_log, "Expected a CBOR map");
-        return false;
+    int64_t id {0};
+    if (!find_int(invocation, "id", id) || id < 0 || id > UINT32_MAX) {
+        LOG_WARN(_log, "Invocation without id");
+        return;
     }
 
-    err = cbor_value_enter_container(&map, &val);
-    if (err != CborNoError) {
-        LOG_WARN(_log, "enter container: %s", cbor_error_string(err));
-        return false;
+    const char* error {"unknown action"};
+    if (find_text(invocation, "path", "motor/speed")) {
+        int64_t speed {0};
+        const bool valid = cbor_value_map_find_value(&invocation, "args", &args) == CborNoError
+            && cbor_value_is_map(&args) && find_int(args, "speed", speed);
+        error = valid ? set_motor_speed(speed) : "speed must be an integer";
     }
 
-    while (!cbor_value_at_end(&val)) {
+    send_result(static_cast<uint32_t>(id), error);
+}
 
-        /* --- Read the text key --- */
-        if (!cbor_value_is_text_string(&val)) {
-            LOG_WARN(_log, "Expected a text key");
-            return false;
-        }
-
-        char   key_buf[64];
-        size_t key_len = sizeof(key_buf);
-        err = cbor_value_copy_text_string(&val, key_buf, &key_len, &val);
-        if (err != CborNoError) {
-            LOG_WARN(_log, "copy text: %s", cbor_error_string(err));
-            return false;
-        }
-
-        if (!cbor_value_is_unsigned_integer(&val)) {
-            LOG_WARN(_log, "Expected a uint value for key '%s'", key_buf);
-            return false;
-        }
-
-        uint64_t speed = 0;
-        err = cbor_value_get_uint64(&val, &speed);
-        if (err != CborNoError) {
-            LOG_WARN(_log, "get uint64: %s", cbor_error_string(err));
-            return false;
-        }
-
-        LOG_INFO(_log, "Command key: %s", key_buf);
-        LOG_INFO(_log, "Command value: %u", (uint32_t)speed);
-        __HAL_TIM_SET_COMPARE(&htim9, TIM_CHANNEL_1, speed * 54);
-
-        err = cbor_value_advance(&val);   /* move past the float */
-        if (err != CborNoError) {
-            LOG_WARN(_log, "advance: %s", cbor_error_string(err));
-            return false;
-        }
+const char* CommandHandler::set_motor_speed(int64_t speed)
+{
+    if (speed < 0 || speed > MOTOR_SPEED_MAX) {
+        return "speed out of range";
     }
 
-    /* 4. Leave the map */
-    err = cbor_value_leave_container(&map, &val);
-    if (err != CborNoError) {
-        LOG_WARN(_log, "leave container: %s", cbor_error_string(err));
-        return false;
+    LOG_INFO(_log, "Motor speed: %u", static_cast<uint32_t>(speed));
+    __HAL_TIM_SET_COMPARE(&htim9, TIM_CHANNEL_1, speed * 54);
+    return nullptr;
+}
+
+/* proto: Message::ActionResult
+   {"ActionResult": {"id": 7, "result": {"Ok": null}}} or {"Err": "reason"} */
+void CommandHandler::send_result(uint32_t id, const char* error)
+{
+    CborEncoder encoder;
+    CborEncoder message;
+    CborEncoder action_result;
+    CborEncoder result;
+
+    cbor_encoder_init(&encoder, _tx_buffer.data(), _tx_buffer.size(), 0);
+    cbor_encoder_create_map(&encoder, &message, 1U);
+    cbor_encode_text_stringz(&message, "ActionResult");
+    cbor_encoder_create_map(&message, &action_result, 2U);
+
+    cbor_encode_text_stringz(&action_result, "id");
+    cbor_encode_uint(&action_result, id);
+
+    cbor_encode_text_stringz(&action_result, "result");
+    cbor_encoder_create_map(&action_result, &result, 1U);
+    if (error == nullptr) {
+        cbor_encode_text_stringz(&result, "Ok");
+        cbor_encode_null(&result);
+    } else {
+        cbor_encode_text_stringz(&result, "Err");
+        cbor_encode_text_stringz(&result, error);
+    }
+    cbor_encoder_close_container(&action_result, &result);
+
+    cbor_encoder_close_container(&message, &action_result);
+    if (cbor_encoder_close_container(&encoder, &message) != CborNoError) {
+        LOG_WARN(_log, "Encoding the action result failed");
+        return;
     }
 
-    return true;
+    _link.write(_tx_buffer.data(), cbor_encoder_get_buffer_size(&encoder, _tx_buffer.data()));
+}
+
+/* proto: Message::Actions, encoded once as it does not change
+   {"Actions": [{"path": "motor/speed", "description": "...",
+                 "params": [{"name": "speed", "kind": {"Int": {"min": 0, "max": 1000}}, "unit": "‰"}]}]} */
+void CommandHandler::encode_actions()
+{
+    CborEncoder encoder;
+    CborEncoder message;
+    CborEncoder actions;
+    CborEncoder action;
+    CborEncoder params;
+    CborEncoder param;
+    CborEncoder kind;
+    CborEncoder bounds;
+
+    cbor_encoder_init(&encoder, _actions.data(), _actions.size(), 0);
+    cbor_encoder_create_map(&encoder, &message, 1U);
+    cbor_encode_text_stringz(&message, "Actions");
+    cbor_encoder_create_array(&message, &actions, 1U);
+
+    cbor_encoder_create_map(&actions, &action, 3U);
+    cbor_encode_text_stringz(&action, "path");
+    cbor_encode_text_stringz(&action, "motor/speed");
+    cbor_encode_text_stringz(&action, "description");
+    cbor_encode_text_stringz(&action, "Duty cycle of the motor PWM");
+
+    cbor_encode_text_stringz(&action, "params");
+    cbor_encoder_create_array(&action, &params, 1U);
+    cbor_encoder_create_map(&params, &param, 3U);
+    cbor_encode_text_stringz(&param, "name");
+    cbor_encode_text_stringz(&param, "speed");
+    cbor_encode_text_stringz(&param, "kind");
+    cbor_encoder_create_map(&param, &kind, 1U);
+    cbor_encode_text_stringz(&kind, "Int");
+    cbor_encoder_create_map(&kind, &bounds, 2U);
+    cbor_encode_text_stringz(&bounds, "min");
+    cbor_encode_int(&bounds, 0);
+    cbor_encode_text_stringz(&bounds, "max");
+    cbor_encode_int(&bounds, MOTOR_SPEED_MAX);
+    cbor_encoder_close_container(&kind, &bounds);
+    cbor_encoder_close_container(&param, &kind);
+    cbor_encode_text_stringz(&param, "unit");
+    cbor_encode_text_stringz(&param, "‰");
+    cbor_encoder_close_container(&params, &param);
+    cbor_encoder_close_container(&action, &params);
+    cbor_encoder_close_container(&actions, &action);
+
+    cbor_encoder_close_container(&message, &actions);
+    if (cbor_encoder_close_container(&encoder, &message) != CborNoError) {
+        LOG_WARN(_log, "Encoding the actions failed");
+        return;
+    }
+
+    _actions_length = cbor_encoder_get_buffer_size(&encoder, _actions.data());
 }

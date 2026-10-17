@@ -2,9 +2,7 @@
 
 #include "custom_mems_conf.h"
 #include "lsm6dso.h"
-
-#include <cbor.h>
-#include <cobs.h>
+#include "trace/clock.h"
 
 #include <stm32f7xx_hal.h>
 
@@ -121,6 +119,8 @@ void Imu::process()
         }
     }
 
+    _acceleration_frame.timestamp_ns = uptime_ns();
+    _acceleration_frame.size = num_samples;
     if (!_frames.trySend(_acceleration_frame)) {
         // message something
     }
