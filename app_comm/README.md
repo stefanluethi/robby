@@ -8,12 +8,10 @@ Tap into a project using an ESP32-C6 and WiFi.
   client connected to the websocket
 - forwards the messages of blip (e.g. invoked actions) COBS framed to the UART
 
-based on: https://github.com/esp-rs/esp-idf-svc/blob/master/examples/http_ws_server.rs
-
 usage
 
 ```
-cargo run --release
+WIFI_SSID=<ssid> WIFI_PASSWORD=<password> cargo run --release
 ```
 
 - connect to the same WiFi as the ESP

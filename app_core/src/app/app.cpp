@@ -60,7 +60,10 @@ void App::launch()
         distance_visualizer->conversion_done_callback();
     });
 
-    auto imu = std::make_unique<Imu>(*acceleration_frames);
+    auto imu = std::make_unique<Imu>(
+        log_registry->createLogger(LogContextId::IMU_ACQUISITION),
+        *acceleration_frames
+    );
 
     auto data_publisher = std::make_unique<DataPublisher>(
         *log_registry,
