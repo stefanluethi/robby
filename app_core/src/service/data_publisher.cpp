@@ -9,11 +9,13 @@ DataPublisher::DataPublisher(
     se_oss::LogRegistry<LogContextId, LogSinkId>& log_registry,
     sonde::Tracer& tracer,
     rtos::MessageQueue<AccelerationFrame>& accelerationFrames,
+    rtos::MessageQueue<fuelgauge_status_t>& battery,
     DistanceMap& distance_map
     ) :
     _log_registry(log_registry),
     _tracer(tracer),
     _acceleration_frames(accelerationFrames),
+    _battery(battery),
     _distance_map(distance_map)
 { }
 
@@ -32,6 +34,11 @@ void DataPublisher::publish()
         publish_distances();
     }
 
+    // Battery, read by the IMU task about once per second
+    if (_battery.tryReceive(_battery_status)) {
+        publish_battery();
+    }
+
     // Slowly updated vlaues
     uint32_t now_ticks = xTaskGetTickCount();
     if (xTaskGetTickCount() - _last_publish_tick > PUBLISH_INTERVAL_SLOW) {
@@ -42,6 +49,11 @@ void DataPublisher::publish()
         _tracer.metadata("imu/acc/y", "g");
         _tracer.metadata("imu/acc/z", "g");
         _tracer.metadata("tof/distance", "mm");
+        _tracer.metadata("battery/soc", "%");
+        _tracer.metadata("battery/voltage", "V");
+        _tracer.metadata("battery/cell1", "V");
+        _tracer.metadata("battery/cell2", "V");
+        _tracer.metadata("battery/current", "mA");
 
         update_thread_table();
         publish_threads();
@@ -95,6 +107,19 @@ void DataPublisher::publish_distances()
             }
         }
     }));
+}
+
+void DataPublisher::publish_battery()
+{
+    constexpr float MV_TO_V {0.001F};
+    const auto& battery = _battery_status;
+
+    _tracer.value("battery/soc", battery.soc);
+    _tracer.value("battery/voltage", battery.voltage * MV_TO_V);
+    _tracer.value("battery/cell1", battery.cell1_voltage * MV_TO_V);
+    _tracer.value("battery/cell2", battery.cell2_voltage * MV_TO_V);
+    // positive while charging, negative while discharging
+    _tracer.value("battery/current", battery.current);
 }
 
 void DataPublisher::publish_threads()

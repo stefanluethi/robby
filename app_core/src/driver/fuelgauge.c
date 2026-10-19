@@ -248,3 +248,46 @@ fuelgauge_broadcast_result_t fuelgauge_disable_broadcast(uint8_t *i2c_configurat
     }
     return result;
 }
+
+static bool fuelgauge_read_word(uint8_t command, uint16_t *value) {
+    uint8_t data[2];
+    if (fuelgauge_read(command, data, sizeof(data)) != HAL_OK) {
+        return false;
+    }
+    *value = (uint16_t)(data[0] | (data[1] << 8));
+    return true;
+}
+
+static bool fuelgauge_read_values(fuelgauge_status_t *status) {
+    uint16_t soc = 0;
+    uint16_t current = 0;
+    uint8_t cells[4];
+
+    /* DAStatus1() starts with the voltages of cell 1 and 2 */
+    if (!fuelgauge_read_word(CMD_RELATIVE_STATE_OF_CHARGE, &soc)
+        || !fuelgauge_read_word(CMD_VOLTAGE, &status->voltage)
+        || !fuelgauge_read_word(CMD_CURRENT, &current)
+        || !fuelgauge_mac_read(SUBCMD_DASTATUS1, cells, sizeof(cells))) {
+        return false;
+    }
+
+    status->soc = soc > 100 ? 100 : (uint8_t)soc;
+    status->current = (int16_t)current;
+    status->cell1_voltage = (uint16_t)(cells[0] | (cells[1] << 8));
+    status->cell2_voltage = (uint16_t)(cells[2] | (cells[3] << 8));
+    return true;
+}
+
+bool fuelgauge_read_status(fuelgauge_status_t *status) {
+    if (status == NULL) {
+        return false;
+    }
+
+    uint32_t timing = hi2c2.Instance->TIMINGR;
+
+    i2c2_set_timing(I2C2_TIMING_100KHZ);
+    bool read = fuelgauge_read_values(status);
+    i2c2_set_timing(timing);
+
+    return read;
+}

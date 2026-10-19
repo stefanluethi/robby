@@ -20,6 +20,7 @@ public:
         se_oss::LogRegistry<LogContextId, LogSinkId>& log_registry,
         sonde::Tracer& tracer,
         rtos::MessageQueue<AccelerationFrame>& accelerationFrames,
+        rtos::MessageQueue<fuelgauge_status_t>& battery,
         DistanceMap& distance_map
     );
 
@@ -40,6 +41,9 @@ private:
     /// When the previous frame was read, 0 if it was not read right before this one
     uint64_t _last_acceleration_timestamp_ns {0U};
 
+    rtos::MessageQueue<fuelgauge_status_t>& _battery;
+    fuelgauge_status_t _battery_status {};
+
     DistanceMap& _distance_map;
     std::array<DistanceSensorImage, 3> _sensors {};
 
@@ -50,6 +54,7 @@ private:
 
     void publish_acceleration();
     void publish_distances();
+    void publish_battery();
     void publish_threads();
     void update_thread_table();
 };

@@ -11,9 +11,14 @@
 
 using namespace robby;
 
-Imu::Imu(se_oss::Logger log, rtos::MessageQueue<AccelerationFrame>& frames) :
+Imu::Imu(
+    se_oss::Logger log,
+    rtos::MessageQueue<AccelerationFrame>& frames,
+    rtos::MessageQueue<fuelgauge_status_t>& battery
+    ) :
     _log{std::move(log)},
-    _frames{frames}
+    _frames{frames},
+    _battery{battery}
 {
     LSM6DSO_IO_t io_ctx;
 
@@ -132,6 +137,31 @@ void Imu::process()
             static_cast<unsigned>(fifo_ctrl4)
         );
         configure();
+    }
+
+    if (xTaskGetTickCount() - _last_battery_tick >= BATTERY_INTERVAL_MS) {
+        _last_battery_tick = xTaskGetTickCount();
+        read_battery();
+    }
+}
+
+void Imu::read_battery()
+{
+    fuelgauge_status_t status {};
+    const bool read = fuelgauge_read_status(&status);
+
+    // only the changes are logged, not every second of a missing gauge
+    if (read == _battery_failed) {
+        _battery_failed = !read;
+        if (read) {
+            LOG_INFO(_log, "Reading the battery gauge works again");
+        } else {
+            LOG_WARN(_log, "Reading the battery gauge failed");
+        }
+    }
+
+    if (read) {
+        _battery.trySend(status);
     }
 }
 

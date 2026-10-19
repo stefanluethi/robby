@@ -44,6 +44,7 @@ void App::launch()
 
     // IPC ---------------------------------------------------------------------
     auto* acceleration_frames = new rtos::MessageQueue<AccelerationFrame>(3);
+    auto* battery = new rtos::MessageQueue<fuelgauge_status_t>(1);
     auto* distance_map = new DistanceMap();
 
     // Services ----------------------------------------------------------------
@@ -62,13 +63,15 @@ void App::launch()
 
     auto imu = std::make_unique<Imu>(
         log_registry->createLogger(LogContextId::IMU_ACQUISITION),
-        *acceleration_frames
+        *acceleration_frames,
+        *battery
     );
 
     auto data_publisher = std::make_unique<DataPublisher>(
         *log_registry,
         *tracer,
         *acceleration_frames,
+        *battery,
         *distance_map
     );
 

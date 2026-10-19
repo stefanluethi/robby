@@ -8,6 +8,19 @@
 extern "C" {
 #endif
 
+/** What the gauge reports about the battery */
+typedef struct {
+    /** Relative state of charge in % */
+    uint8_t soc;
+    /** Pack voltage in mV */
+    uint16_t voltage;
+    /** Cell voltages in mV */
+    uint16_t cell1_voltage;
+    uint16_t cell2_voltage;
+    /** Current in mA, positive while charging, negative while discharging */
+    int16_t current;
+} fuelgauge_status_t;
+
 typedef enum {
     /** BROADCAST mode was already off, nothing was written */
     FUELGAUGE_BROADCAST_OFF,
@@ -66,6 +79,16 @@ bool fuelgauge_get_cell2_voltage(uint16_t *voltage);
  * @return What was found and done.
  */
 fuelgauge_broadcast_result_t fuelgauge_disable_broadcast(uint8_t *i2c_configuration);
+
+/**
+ * @brief Read the state of charge, the voltages and the current in one access.
+ *
+ * Switches I2C2 to ~100 kHz for the access and restores the previous timing afterwards, so
+ * nothing else may use I2C2 meanwhile. Takes a few milliseconds.
+ * @param[out] status The values read, only valid if true is returned.
+ * @return true if all values were read.
+ */
+bool fuelgauge_read_status(fuelgauge_status_t *status);
 
 #ifdef __cplusplus
 }
