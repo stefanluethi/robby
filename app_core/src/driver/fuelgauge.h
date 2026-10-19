@@ -4,6 +4,23 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef enum {
+    /** BROADCAST mode was already off, nothing was written */
+    FUELGAUGE_BROADCAST_OFF,
+    /** BROADCAST mode was on, it got cleared and the read back confirms it */
+    FUELGAUGE_BROADCAST_CLEARED,
+    /** The gauge is SEALED, its data flash can't be accessed */
+    FUELGAUGE_BROADCAST_SEALED,
+    /** The gauge doesn't acknowledge its address */
+    FUELGAUGE_BROADCAST_NO_GAUGE,
+    /** A transfer failed or the read back still shows BROADCAST mode */
+    FUELGAUGE_BROADCAST_FAILED,
+} fuelgauge_broadcast_result_t;
+
 /**
  * @brief Initialize the fuel gauge (if necessary).
  * @return true if device responds, false otherwise.
@@ -37,5 +54,21 @@ bool fuelgauge_get_cell1_voltage(uint16_t *voltage);
  * @return true if read was successful, false otherwise.
  */
 bool fuelgauge_get_cell2_voltage(uint16_t *voltage);
+
+/**
+ * @brief Turn off the gauge's BROADCAST mode in its data flash (I2C Configuration, 0x4602).
+ *
+ * In BROADCAST mode the gauge writes ChargingCurrent() to the charger address 0xD4 every 15 s,
+ * which is also the LSM6DSO's address and overwrites its FIFO_CTRL4. The data flash is only
+ * written when BROADCAST mode is on. Switches I2C2 to ~100 kHz for the access and restores the
+ * previous timing afterwards, so nothing else may use I2C2 meanwhile.
+ * @param[out] i2c_configuration Optional, last value read from I2C Configuration.
+ * @return What was found and done.
+ */
+fuelgauge_broadcast_result_t fuelgauge_disable_broadcast(uint8_t *i2c_configuration);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* FUELGAUGE_H */

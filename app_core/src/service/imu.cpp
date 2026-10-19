@@ -1,6 +1,7 @@
 #include "imu.h"
 
 #include "custom_mems_conf.h"
+#include "driver/fuelgauge.h"
 #include "lsm6dso.h"
 #include "trace/clock.h"
 
@@ -30,7 +31,33 @@ Imu::Imu(se_oss::Logger log, rtos::MessageQueue<AccelerationFrame>& frames) :
 
 void Imu::start()
 {
+    // the gauge shares I2C2 and must stop broadcasting before the FIFO gets configured
+    disable_gauge_broadcast();
     configure();
+}
+
+void Imu::disable_gauge_broadcast()
+{
+    // A gauge in BROADCAST mode writes its charging current to 0xD4 every 15 s, the address of
+    // the IMU, which overwrites FIFO_CTRL4 and stops the FIFO. New battery packs ship with it on.
+    uint8_t i2c_configuration = 0U;
+    switch (fuelgauge_disable_broadcast(&i2c_configuration)) {
+        case FUELGAUGE_BROADCAST_OFF:
+            LOG_INFO(_log, "Gauge broadcast is off (I2C configuration 0x%02x)", static_cast<unsigned>(i2c_configuration));
+            break;
+        case FUELGAUGE_BROADCAST_CLEARED:
+            LOG_INFO(_log, "Gauge broadcast turned off (I2C configuration 0x%02x)", static_cast<unsigned>(i2c_configuration));
+            break;
+        case FUELGAUGE_BROADCAST_SEALED:
+            LOG_WARN(_log, "Gauge is sealed, can't check its broadcast mode");
+            break;
+        case FUELGAUGE_BROADCAST_NO_GAUGE:
+            LOG_WARN(_log, "Gauge not responding, can't check its broadcast mode");
+            break;
+        case FUELGAUGE_BROADCAST_FAILED:
+            LOG_WARN(_log, "Turning off the gauge broadcast failed (I2C configuration 0x%02x)", static_cast<unsigned>(i2c_configuration));
+            break;
+    }
 }
 
 bool Imu::configure()

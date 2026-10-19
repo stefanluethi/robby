@@ -12,6 +12,25 @@ extern I2C_HandleTypeDef hi2c2;
 
 #define I2C_TIMEOUT 1000
 
+/* MAC access through the AltManufacturerAccess() registers, see TI SLUUCO9B */
+#define CMD_ALT_MANUFACTURER_ACCESS 0x3E
+#define CMD_MAC_DATA_CHECKSUM 0x60
+#define SUBCMD_OPERATION_STATUS 0x0054
+#define OPERATION_STATUS_SEC_SHIFT 8
+#define OPERATION_STATUS_SEC_MASK 0x3U
+#define OPERATION_STATUS_SEC_SEALED 0x3U
+
+/* Settings/Configuration/I2C Configuration, bit 0 enables BROADCAST mode */
+#define DF_I2C_CONFIGURATION 0x4602
+#define I2C_CONFIGURATION_BCAST 0x01U
+
+/* The gauge only answers in standard mode, its 400 kHz XL mode is off.
+ * ~100 kHz from PCLK1 = 54 MHz. */
+#define I2C2_TIMING_100KHZ 0xA0421216
+#define I2C_ATTEMPTS 3
+#define MAC_RESPONSE_DELAY_MS 2
+#define DF_WRITE_DELAY_MS 100
+
 static bool fuelgauge_read_reg16(uint8_t reg, uint16_t *value) {
     uint8_t data[2] = {0, 0};
     HAL_StatusTypeDef status = HAL_I2C_Mem_Read(&hi2c2, 
@@ -114,4 +133,118 @@ bool fuelgauge_get_cell2_voltage(uint16_t *voltage) {
     }
 
     return fuelgauge_read_dastatus1(NULL, voltage);
+}
+
+static void i2c2_set_timing(uint32_t timing) {
+    /* TIMINGR is only writable while the peripheral is disabled */
+    __HAL_I2C_DISABLE(&hi2c2);
+    hi2c2.Instance->TIMINGR = timing;
+    __HAL_I2C_ENABLE(&hi2c2);
+}
+
+/* The gauge becomes bus master while it broadcasts, so a transfer can lose arbitration */
+static HAL_StatusTypeDef fuelgauge_write(uint8_t reg, uint8_t *data, uint16_t size) {
+    HAL_StatusTypeDef status = HAL_ERROR;
+    for (int i = 0; i < I2C_ATTEMPTS && status != HAL_OK; ++i) {
+        status = HAL_I2C_Mem_Write(&hi2c2, BQ28Z620_I2C_ADDR, reg, I2C_MEMADD_SIZE_8BIT, data, size, I2C_TIMEOUT);
+    }
+    return status;
+}
+
+static HAL_StatusTypeDef fuelgauge_read(uint8_t reg, uint8_t *data, uint16_t size) {
+    HAL_StatusTypeDef status = HAL_ERROR;
+    for (int i = 0; i < I2C_ATTEMPTS && status != HAL_OK; ++i) {
+        status = HAL_I2C_Mem_Read(&hi2c2, BQ28Z620_I2C_ADDR, reg, I2C_MEMADD_SIZE_8BIT, data, size, I2C_TIMEOUT);
+    }
+    return status;
+}
+
+/* Sends a MAC command or data flash address and reads back its echo followed by the data */
+static bool fuelgauge_mac_read(uint16_t command, uint8_t *data, uint16_t size) {
+    uint8_t buf[2 + 4];
+    if (size > sizeof(buf) - 2) {
+        return false;
+    }
+
+    buf[0] = command & 0xFF;
+    buf[1] = (command >> 8) & 0xFF;
+    if (fuelgauge_write(CMD_ALT_MANUFACTURER_ACCESS, buf, 2) != HAL_OK) {
+        return false;
+    }
+
+    HAL_Delay(MAC_RESPONSE_DELAY_MS);
+
+    if (fuelgauge_read(CMD_ALT_MANUFACTURER_ACCESS, buf, 2 + size) != HAL_OK) {
+        return false;
+    }
+    if (buf[0] != (command & 0xFF) || buf[1] != ((command >> 8) & 0xFF)) {
+        return false;
+    }
+
+    for (uint16_t i = 0; i < size; ++i) {
+        data[i] = buf[2 + i];
+    }
+    return true;
+}
+
+static bool fuelgauge_df_write_byte(uint16_t address, uint8_t value) {
+    uint8_t buf[3] = { address & 0xFF, (address >> 8) & 0xFF, value };
+    if (fuelgauge_write(CMD_ALT_MANUFACTURER_ACCESS, buf, sizeof(buf)) != HAL_OK) {
+        return false;
+    }
+
+    /* The write is committed once MACDataChecksum() and MACDataLength() match,
+     * the length counts the address, data, checksum and length bytes */
+    uint8_t sum = buf[0] + buf[1] + buf[2];
+    uint8_t checksum[2] = { (uint8_t)~sum, sizeof(buf) + 2 };
+    return fuelgauge_write(CMD_MAC_DATA_CHECKSUM, checksum, sizeof(checksum)) == HAL_OK;
+}
+
+static fuelgauge_broadcast_result_t fuelgauge_clear_broadcast(uint8_t *i2c_configuration) {
+    uint8_t buf[4];
+
+    /* The very first transfer tells whether a gauge is there at all */
+    if (!fuelgauge_mac_read(SUBCMD_OPERATION_STATUS, buf, sizeof(buf))) {
+        return (HAL_I2C_GetError(&hi2c2) & HAL_I2C_ERROR_AF) ? FUELGAUGE_BROADCAST_NO_GAUGE
+                                                             : FUELGAUGE_BROADCAST_FAILED;
+    }
+
+    /* A SEALED gauge doesn't give access to its data flash */
+    uint32_t operation_status = buf[0] | (buf[1] << 8) | (buf[2] << 16) | ((uint32_t)buf[3] << 24);
+    if (((operation_status >> OPERATION_STATUS_SEC_SHIFT) & OPERATION_STATUS_SEC_MASK) == OPERATION_STATUS_SEC_SEALED) {
+        return FUELGAUGE_BROADCAST_SEALED;
+    }
+
+    if (!fuelgauge_mac_read(DF_I2C_CONFIGURATION, i2c_configuration, 1)) {
+        return FUELGAUGE_BROADCAST_FAILED;
+    }
+    if ((*i2c_configuration & I2C_CONFIGURATION_BCAST) == 0) {
+        return FUELGAUGE_BROADCAST_OFF;
+    }
+
+    if (!fuelgauge_df_write_byte(DF_I2C_CONFIGURATION, *i2c_configuration & ~I2C_CONFIGURATION_BCAST)) {
+        return FUELGAUGE_BROADCAST_FAILED;
+    }
+
+    HAL_Delay(DF_WRITE_DELAY_MS);
+
+    if (!fuelgauge_mac_read(DF_I2C_CONFIGURATION, i2c_configuration, 1)) {
+        return FUELGAUGE_BROADCAST_FAILED;
+    }
+    return (*i2c_configuration & I2C_CONFIGURATION_BCAST) ? FUELGAUGE_BROADCAST_FAILED
+                                                          : FUELGAUGE_BROADCAST_CLEARED;
+}
+
+fuelgauge_broadcast_result_t fuelgauge_disable_broadcast(uint8_t *i2c_configuration) {
+    uint8_t value = 0;
+    uint32_t timing = hi2c2.Instance->TIMINGR;
+
+    i2c2_set_timing(I2C2_TIMING_100KHZ);
+    fuelgauge_broadcast_result_t result = fuelgauge_clear_broadcast(&value);
+    i2c2_set_timing(timing);
+
+    if (i2c_configuration) {
+        *i2c_configuration = value;
+    }
+    return result;
 }

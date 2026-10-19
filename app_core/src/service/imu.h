@@ -40,6 +40,7 @@ private:
     static constexpr uint32_t STALL_TIMEOUT_MS {300U};
     static constexpr uint32_t RESET_POLL_LIMIT {100U};
 
+    void disable_gauge_broadcast();
     bool configure();
     void read_fifo(uint16_t num_words);
 
