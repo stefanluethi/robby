@@ -54,9 +54,25 @@ void DataPublisher::publish()
 void DataPublisher::publish_acceleration()
 {
     const auto& frame = _acceleration_frame;
+    if (frame.size == 0U) {
+        return;
+    }
+
+    // The samples of a frame follow those of the previous one, so they are spread between
+    // the times both frames were read: the trace has no gap between frames, whatever the
+    // actual sample rate of the IMU (about 806 Hz instead of 833 Hz). After a gap, e.g. a
+    // reconfiguration of the IMU, they are counted back from the read time at the nominal rate.
+    const uint64_t nominal_ns {frame.size * ACCELERATION_SAMPLE_PERIOD_NS};
+    const uint64_t since_last_ns {frame.timestamp_ns - _last_acceleration_timestamp_ns};
+    const bool follows_last {
+        _last_acceleration_timestamp_ns != 0U && frame.timestamp_ns > _last_acceleration_timestamp_ns
+        && since_last_ns > nominal_ns / 2U && since_last_ns < nominal_ns * 3U / 2U
+    };
+    const uint64_t period_ns {follows_last ? since_last_ns / frame.size : ACCELERATION_SAMPLE_PERIOD_NS};
+    _last_acceleration_timestamp_ns = frame.timestamp_ns;
 
     for (std::size_t i = 0; i < frame.size; i += ACCELERATION_DECIMATION) {
-        const sonde::Timestamp timestamp {frame.timestamp_ns - (frame.size - 1U - i) * ACCELERATION_SAMPLE_PERIOD_NS};
+        const sonde::Timestamp timestamp {frame.timestamp_ns - (frame.size - 1U - i) * period_ns};
         _tracer.value(timestamp, "imu/acc/x", frame.x[i] * ACCELERATION_SCALE_G);
         _tracer.value(timestamp, "imu/acc/y", frame.y[i] * ACCELERATION_SCALE_G);
         _tracer.value(timestamp, "imu/acc/z", frame.z[i] * ACCELERATION_SCALE_G);

@@ -3,7 +3,6 @@
 
 extern crate alloc;
 use alloc::string::String;
-use alloc::vec::Vec;
 
 use embassy_executor::Spawner;
 use embassy_net::{
@@ -37,6 +36,8 @@ const WIFI_SSID: &str = env!("WIFI_SSID");
 const WIFI_PASSWORD: &str = env!("WIFI_PASSWORD");
 
 const MAX_RECEIVE_LEN: usize = 128;
+/// Largest frame from the target: a sonde batch of app_core (its trace storage is 1024 bytes)
+const MAX_FRAME_LEN: usize = 1024;
 
 fn init_heap() {
     const HEAP_SIZE: usize = 64 * 1024;
@@ -51,10 +52,15 @@ fn init_heap() {
     }
 }
 
-// Channel to send messages from UART to WS
-static UART_TO_WS: Channel<CriticalSectionRawMutex, Vec<u8>, 16> = Channel::new();
+// The frames are static, not on the heap: the queue fills up with sonde batches of about 1 kB
+// while no client is connected, which exhausted the heap the radio needs too.
+type UartFrame = heapless::Vec<u8, MAX_FRAME_LEN>;
+type WsFrame = heapless::Vec<u8, MAX_RECEIVE_LEN>;
+
+// Channel to send messages from UART to WS, ~0.5 s of traces to bridge WiFi hiccups
+static UART_TO_WS: Channel<CriticalSectionRawMutex, UartFrame, 32> = Channel::new();
 // Channel to send messages from WS to UART
-static WS_TO_UART: Channel<CriticalSectionRawMutex, Vec<u8>, 16> = Channel::new();
+static WS_TO_UART: Channel<CriticalSectionRawMutex, WsFrame, 16> = Channel::new();
 
 #[esp_rtos::main]
 async fn main(spawner: Spawner) -> ! {
@@ -165,7 +171,8 @@ async fn net_task(mut runner: embassy_net::Runner<'static, esp_radio::wifi::Inte
 #[embassy_executor::task]
 async fn ws_server_task(stack: &'static Stack<'static>) {
     let mut rx_buffer = [0; 4096];
-    let mut tx_buffer = [0; 4096];
+    // the traces stream at ~65 kB/s, a larger window keeps up with the round trips of WiFi
+    let mut tx_buffer = [0; 16384];
 
     loop {
         let mut socket = TcpSocket::new(*stack, &mut rx_buffer, &mut tx_buffer);
@@ -281,9 +288,10 @@ async fn ws_server_task(stack: &'static Stack<'static>) {
                                 
                                 debug!("received {} bytes on ws -> forwarding to UART", payload_len);
                                 
-                                let mut to_send = Vec::new();
-                                to_send.extend_from_slice(&frame_buf[..payload_len]);
-                                WS_TO_UART.send(to_send).await;
+                                // fits, payload_len <= MAX_RECEIVE_LEN
+                                if let Ok(to_send) = WsFrame::from_slice(&frame_buf[..payload_len]) {
+                                    WS_TO_UART.send(to_send).await;
+                                }
                             } else {
                                 let _ = socket.write_all(&[0x88, 0x02, 0x03, 0xE8]).await; 
                                 socket.flush().await.ok();
@@ -390,9 +398,12 @@ async fn uart_rx_loop(mut uart_rx: UartRx<'static, Async>, mut led_conn: Output<
                     } else if frame.len() > 1 {
                         if let Ok(report) = cobs::decode(frame, &mut dec_buf) {
                             debug!("decoded {}B frame, forwarding to websocket", report.frame_size());
-                            let mut to_send = Vec::new();
-                            to_send.extend_from_slice(&dec_buf[..report.frame_size()]);
-                            let _ = UART_TO_WS.try_send(to_send);
+                            match UartFrame::from_slice(&dec_buf[..report.frame_size()]) {
+                                Ok(to_send) => {
+                                    let _ = UART_TO_WS.try_send(to_send);
+                                }
+                                Err(_) => warn!("Dropping frame of {}B, larger than {}B", report.frame_size(), MAX_FRAME_LEN),
+                            }
                         } else {
                             warn!("COBS decode failed for frame of size {}", frame.len());
                         }

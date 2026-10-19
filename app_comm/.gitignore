@@ -3,3 +3,4 @@
 /target
 /Cargo.lock
 user.env
+wifi.env

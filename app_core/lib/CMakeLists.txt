@@ -74,7 +74,7 @@ set(SONDE_FETCH_TINYCBOR OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(
         blip
         GIT_REPOSITORY https://github.com/stefanluethi/blip.git
-        GIT_TAG        78585d50c411a5993e1549321ebaa410070556f8
+        GIT_TAG        96ff5b275561eb4b5403ea92b86733a48edd7971
         SOURCE_SUBDIR  sonde
 )
 FetchContent_MakeAvailable(blip)

@@ -37,6 +37,8 @@ private:
     // Message buffers
     rtos::MessageQueue<AccelerationFrame>& _acceleration_frames;
     AccelerationFrame _acceleration_frame {};
+    /// When the previous frame was read, 0 if it was not read right before this one
+    uint64_t _last_acceleration_timestamp_ns {0U};
 
     DistanceMap& _distance_map;
     std::array<DistanceSensorImage, 3> _sensors {};
