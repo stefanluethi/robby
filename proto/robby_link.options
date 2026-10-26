@@ -1,0 +1,23 @@
+# nanopb options for robby_link.proto: every field static (no pb_callback_t).
+# Keep the limits in sync with robby_link.toml (micropb).
+
+# Records per frame: a bound for decoders that read a whole Uplink at once. The encoder
+# packs records into a frame of at most 1 KiB and never more than this many.
+robby.link.Uplink.records       max_count:32
+
+# app_core's AccelerationFrame holds up to 100 samples. The raw counts are int16, so
+# int_size bounds a sample to 3 bytes per axis on the wire (sint32 would allow 5).
+robby.link.ImuBatch.x           max_count:100 int_size:IS_16
+robby.link.ImuBatch.y           max_count:100 int_size:IS_16
+robby.link.ImuBatch.z           max_count:100 int_size:IS_16
+robby.link.Synthetic.x          max_count:100 int_size:IS_16
+robby.link.Synthetic.y          max_count:100 int_size:IS_16
+robby.link.Synthetic.z          max_count:100 int_size:IS_16
+
+# 3 sensors x 8 x 8 zones, int16 mm
+robby.link.DistanceImage.mm     max_count:192 int_size:IS_16
+
+# max_size includes the terminating NUL
+robby.link.TaskStats.name       max_size:16
+robby.link.LogRecord.message    max_size:256
+robby.link.ActionResult.error   max_size:64

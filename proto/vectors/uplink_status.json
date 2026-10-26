@@ -1,0 +1,66 @@
+{
+  "description": "the once-per-second records: battery, 3 tasks, link stats",
+  "type": "robby.link.Uplink",
+  "payload_bytes": 156,
+  "frame_bytes": 160,
+  "value": {
+    "seq": 1234,
+    "records": [
+      {
+        "battery": {
+          "t_ns": 3601000000000,
+          "soc_pct": 87,
+          "voltage_mv": 8012,
+          "cell1_mv": 4003,
+          "cell2_mv": 4009,
+          "current_ma": -350
+        }
+      },
+      {
+        "task": {
+          "t_ns": 3601000000000,
+          "name": "data_publisher",
+          "priority": 24,
+          "runtime_bp": 1234,
+          "stack_size_bytes": 4096,
+          "stack_free_min_bytes": 2900
+        }
+      },
+      {
+        "task": {
+          "t_ns": 3601000000000,
+          "name": "imu",
+          "priority": 40,
+          "runtime_bp": 860,
+          "stack_size_bytes": 2048,
+          "stack_free_min_bytes": 1088
+        }
+      },
+      {
+        "task": {
+          "t_ns": 3601000000000,
+          "name": "IDLE",
+          "priority": 0,
+          "runtime_bp": 9655,
+          "stack_size_bytes": 512,
+          "stack_free_min_bytes": 236
+        }
+      },
+      {
+        "link_stats": {
+          "t_ns": 3601000000000,
+          "tx_bytes": 36012345,
+          "tx_frames": 46210,
+          "tx_write_us": 1234567,
+          "tx_write_max_us": 812,
+          "tx_frames_dropped": 3,
+          "records_dropped": 0,
+          "rx_frames": 12,
+          "rx_errors": 1,
+          "rx_seq_gaps": 0,
+          "baud": 1000000
+        }
+      }
+    ]
+  }
+}

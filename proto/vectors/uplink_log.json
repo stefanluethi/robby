@@ -1,0 +1,31 @@
+{
+  "description": "a log record, an ActionResult ok and one with an error",
+  "type": "robby.link.Uplink",
+  "payload_bytes": 83,
+  "frame_bytes": 87,
+  "value": {
+    "seq": 1235,
+    "records": [
+      {
+        "log": {
+          "t_ns": 3601002000000,
+          "level": "LOG_LEVEL_WARN",
+          "component_id": "COMPONENT_IMU",
+          "message": "IMU FIFO stalled, reconfiguring"
+        }
+      },
+      {
+        "action_result": {
+          "id": 1,
+          "error": ""
+        }
+      },
+      {
+        "action_result": {
+          "id": 2,
+          "error": "speed out of range"
+        }
+      }
+    ]
+  }
+}
