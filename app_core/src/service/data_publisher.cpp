@@ -1,29 +1,35 @@
 #include "data_publisher.h"
 
-#include <cstdio>
-#include <optional>
+#include "trace/clock.h"
+
+#include <algorithm>
 
 using namespace robby;
 
 DataPublisher::DataPublisher(
     se_oss::LogRegistry<LogContextId, LogSinkId>& log_registry,
-    sonde::Tracer& tracer,
+    Link& link,
     rtos::MessageQueue<AccelerationFrame>& accelerationFrames,
     rtos::MessageQueue<fuelgauge_status_t>& battery,
-    DistanceMap& distance_map
-    ) :
+    DistanceMap& distance_map,
+    BenchLoad& bench_load
+) :
     _log_registry(log_registry),
-    _tracer(tracer),
+    _link(link),
     _acceleration_frames(accelerationFrames),
     _battery(battery),
-    _distance_map(distance_map)
-{ }
+    _distance_map(distance_map),
+    _bench_load(bench_load)
+{
+}
 
 void DataPublisher::publish()
 {
-    // IMU measurement streams
+    // IMU measurement streams, all samples
     while (_acceleration_frames.tryReceive(_acceleration_frame)) {
-        publish_acceleration();
+        if (_imu_batcher.make(_acceleration_frame, _record)) {
+            _link.add(_record);
+        }
     }
 
     // Distance map
@@ -31,123 +37,56 @@ void DataPublisher::publish()
         std::ranges::copy(_distance_map.sensors, _sensors.begin());
         _distance_map.lock.unlock();
 
-        publish_distances();
+        records::make_distance(uptime_ns(), _sensors, _record);
+        _link.add(_record);
     }
 
     // Battery, read by the IMU task about once per second
     if (_battery.tryReceive(_battery_status)) {
-        publish_battery();
+        records::make_battery(uptime_ns(), _battery_status, _record);
+        _link.add(_record);
     }
 
-    // Slowly updated vlaues
-    uint32_t now_ticks = xTaskGetTickCount();
-    if (xTaskGetTickCount() - _last_publish_tick > PUBLISH_INTERVAL_SLOW) {
+    // Slowly updated values
+    const uint32_t now_ticks = xTaskGetTickCount();
+    if (now_ticks - _last_publish_tick > PUBLISH_INTERVAL_SLOW) {
         _last_publish_tick = now_ticks;
 
-        // Units, repeated for clients connecting later
-        _tracer.metadata("imu/acc/x", "g");
-        _tracer.metadata("imu/acc/y", "g");
-        _tracer.metadata("imu/acc/z", "g");
-        _tracer.metadata("tof/distance", "mm");
-        _tracer.metadata("battery/soc", "%");
-        _tracer.metadata("battery/voltage", "V");
-        _tracer.metadata("battery/cell1", "V");
-        _tracer.metadata("battery/cell2", "V");
-        _tracer.metadata("battery/current", "mA");
-
-        update_thread_table();
-        publish_threads();
+        const uint64_t now_ns {uptime_ns()};
+        publish_tasks(now_ns);
+        _link.make_stats(now_ns, _record);
+        _link.add(_record);
     }
 
     _log_registry.distributeMessages();
-    _tracer.commit();
-}
 
-void DataPublisher::publish_acceleration()
-{
-    const auto& frame = _acceleration_frame;
-    if (frame.size == 0U) {
-        return;
+    // Synthetic load of the bench, if it's on
+    const uint32_t dropped {_bench_load.generate(uptime_ns(), _record, [this](const robby_link_Record& record) {
+        _link.add(record);
+    })};
+    if (dropped > 0U) {
+        _link.count_dropped_records(dropped);
     }
 
-    // The samples of a frame follow those of the previous one, so they are spread between
-    // the times both frames were read: the trace has no gap between frames, whatever the
-    // actual sample rate of the IMU (about 806 Hz instead of 833 Hz). After a gap, e.g. a
-    // reconfiguration of the IMU, they are counted back from the read time at the nominal rate.
-    const uint64_t nominal_ns {frame.size * ACCELERATION_SAMPLE_PERIOD_NS};
-    const uint64_t since_last_ns {frame.timestamp_ns - _last_acceleration_timestamp_ns};
-    const bool follows_last {
-        _last_acceleration_timestamp_ns != 0U && frame.timestamp_ns > _last_acceleration_timestamp_ns
-        && since_last_ns > nominal_ns / 2U && since_last_ns < nominal_ns * 3U / 2U
-    };
-    const uint64_t period_ns {follows_last ? since_last_ns / frame.size : ACCELERATION_SAMPLE_PERIOD_NS};
-    _last_acceleration_timestamp_ns = frame.timestamp_ns;
-
-    for (std::size_t i = 0; i < frame.size; i += ACCELERATION_DECIMATION) {
-        const sonde::Timestamp timestamp {frame.timestamp_ns - (frame.size - 1U - i) * period_ns};
-        _tracer.value(timestamp, "imu/acc/x", frame.x[i] * ACCELERATION_SCALE_G);
-        _tracer.value(timestamp, "imu/acc/y", frame.y[i] * ACCELERATION_SCALE_G);
-        _tracer.value(timestamp, "imu/acc/z", frame.z[i] * ACCELERATION_SCALE_G);
-    }
+    _link.flush();
 }
 
-void DataPublisher::publish_distances()
-{
-    // the rows of all sensors one after another, invalid distances as null
-    const std::size_t rows {_sensors.size() * _sensors[0].size()};
-
-    _tracer.value("tof/distance", sonde::array(rows, [&](sonde::Array& image) {
-        for (const auto& sensor : _sensors) {
-            for (const auto& row : sensor) {
-                image.add(sonde::array(row.size(), [&](sonde::Array& distances) {
-                    for (int16_t distance : row) {
-                        distances.add(distance >= 0 ? std::optional<int16_t> {distance} : std::nullopt);
-                    }
-                }));
-            }
-        }
-    }));
-}
-
-void DataPublisher::publish_battery()
-{
-    constexpr float MV_TO_V {0.001F};
-    const auto& battery = _battery_status;
-
-    _tracer.value("battery/soc", battery.soc);
-    _tracer.value("battery/voltage", battery.voltage * MV_TO_V);
-    _tracer.value("battery/cell1", battery.cell1_voltage * MV_TO_V);
-    _tracer.value("battery/cell2", battery.cell2_voltage * MV_TO_V);
-    // positive while charging, negative while discharging
-    _tracer.value("battery/current", battery.current);
-}
-
-void DataPublisher::publish_threads()
-{
-    for (std::size_t i = 0; i < _thread_table.size; ++i) {
-        const auto& thread = _thread_table.threads[i];
-
-        std::array<char, 8 + sizeof(thread.name)> path {};
-        std::snprintf(path.data(), path.size(), "tasks/%s", thread.name);
-        _tracer.value(path.data(), thread);
-    }
-}
-
-void DataPublisher::update_thread_table()
+void DataPublisher::publish_tasks(uint64_t t_ns)
 {
     uint32_t total_runtime {0U};
-    std::size_t task_count = uxTaskGetSystemState(_task_status.data(), _task_status.size(), &total_runtime);
+    const std::size_t task_count {uxTaskGetSystemState(_task_status.data(), _task_status.size(), &total_runtime)};
 
-    for (std::size_t i = 0; i < std::min(task_count, _thread_table.threads.size()); ++i) {
-        auto& thread = _thread_table.threads[i];
-        auto& task_info = _task_status[i];
-        std::strncpy(thread.name, task_info.pcTaskName, sizeof(thread.name));
-        thread.name[sizeof(thread.name) - 1U] = '\0';
-        thread.priority = task_info.uxCurrentPriority;
-        // todo: find fix for counter wrap around
-        thread.runtime = total_runtime > 0 ? 100.0F * task_info.ulRunTimeCounter / total_runtime : 0.0F;
-        thread.stack_size = task_info.pxEndOfStack - task_info.pxStackBase;
-        thread.stack_usage = 100.0F * (1.0F - static_cast<float>(task_info.usStackHighWaterMark) / thread.stack_size);
+    for (std::size_t i = 0; i < std::min(task_count, _task_status.size()); ++i) {
+        const auto& task = _task_status[i];
+        const records::TaskInfo info {
+            .name = task.pcTaskName,
+            .priority = static_cast<uint32_t>(task.uxCurrentPriority),
+            .runtime = task.ulRunTimeCounter,
+            .total_runtime = total_runtime,
+            .stack_size_bytes = static_cast<uint32_t>((task.pxEndOfStack - task.pxStackBase) * sizeof(StackType_t)),
+            .stack_free_min_bytes = static_cast<uint32_t>(task.usStackHighWaterMark * sizeof(StackType_t)),
+        };
+        records::make_task(t_ns, info, _record);
+        _link.add(_record);
     }
-    _thread_table.size = std::min(task_count, _thread_table.threads.size());
 }

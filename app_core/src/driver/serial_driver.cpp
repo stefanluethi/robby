@@ -10,11 +10,17 @@ namespace {
 std::array<SerialDriver*, 2> g_drivers {};
 std::array<UART_HandleTypeDef*, 2> g_uarts {};
 
+DMA_HandleTypeDef g_usart2_tx_dma {};
+
+/// Interrupt priority of the DMA, the same as the UART's (FreeRTOS calls are allowed)
+constexpr uint32_t DMA_IRQ_PRIORITY {6U};
+
 }  // namespace
 
-SerialDriver::SerialDriver(UART_HandleTypeDef& uart) :
-    _uart {uart}
+SerialDriver::SerialDriver(UART_HandleTypeDef& uart) : _uart {uart}
 {
+    _idle.release();
+
     for (std::size_t i = 0; i < g_drivers.size(); ++i) {
         if (g_drivers[i] == nullptr) {
             g_uarts[i] = &uart;
@@ -24,38 +30,61 @@ SerialDriver::SerialDriver(UART_HandleTypeDef& uart) :
     }
 }
 
-std::size_t SerialDriver::write(const void* data, std::size_t length)
+bool SerialDriver::write(const uint8_t* data, std::size_t length)
 {
     if (length == 0U || length > UINT16_MAX) {
-        return 0;
+        return false;
     }
 
-    // a release left over from a transmission that timed out
-    _transmitted.tryAcquire(0U);
-
-    if (HAL_UART_Transmit_IT(&_uart, static_cast<const uint8_t*>(data), static_cast<uint16_t>(length)) != HAL_OK) {
-        return 0;
-    }
-
-    const uint32_t timeout_ms = (length / 1024U + 1U) * TIMEOUT_MS_PER_KB;
-    if (!_transmitted.tryAcquire(timeout_ms)) {
+    if (!_idle.tryAcquire(_timeout_ms)) {
+        // stuck: start over, this frame is lost
         HAL_UART_AbortTransmit(&_uart);
-        return 0;
+        _idle.release();
+        return false;
     }
-    return length;
+
+    const auto size = static_cast<uint16_t>(length);
+    const HAL_StatusTypeDef status {
+        _uart.hdmatx != nullptr ? HAL_UART_Transmit_DMA(&_uart, data, size) : HAL_UART_Transmit_IT(&_uart, data, size)
+    };
+    if (status != HAL_OK) {
+        _idle.release();
+        return false;
+    }
+
+    // the next write waits at most for these bytes, 10 bits each
+    const uint32_t baud {_uart.Init.BaudRate > 0U ? _uart.Init.BaudRate : 1U};
+    _timeout_ms = static_cast<uint32_t>(uint64_t {length} * 10U * 1000U / baud) + TIMEOUT_MARGIN_MS;
+    return true;
 }
 
-std::size_t SerialDriver::read(void* data, std::size_t maxLength)
+void SerialDriver::transmit_complete() { _idle.release(); }
+
+void robby::enable_usart2_tx_dma(UART_HandleTypeDef& uart)
 {
-    (void) data;
-    (void) maxLength;
-    return 0;
+    __HAL_RCC_DMA1_CLK_ENABLE();
+
+    g_usart2_tx_dma.Instance = DMA1_Stream6;
+    g_usart2_tx_dma.Init.Channel = DMA_CHANNEL_4;
+    g_usart2_tx_dma.Init.Direction = DMA_MEMORY_TO_PERIPH;
+    g_usart2_tx_dma.Init.PeriphInc = DMA_PINC_DISABLE;
+    g_usart2_tx_dma.Init.MemInc = DMA_MINC_ENABLE;
+    g_usart2_tx_dma.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+    g_usart2_tx_dma.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
+    g_usart2_tx_dma.Init.Mode = DMA_NORMAL;
+    g_usart2_tx_dma.Init.Priority = DMA_PRIORITY_LOW;
+    g_usart2_tx_dma.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
+    if (HAL_DMA_Init(&g_usart2_tx_dma) != HAL_OK) {
+        // stays on interrupts
+        return;
+    }
+    __HAL_LINKDMA(&uart, hdmatx, g_usart2_tx_dma);
+
+    HAL_NVIC_SetPriority(DMA1_Stream6_IRQn, DMA_IRQ_PRIORITY, 0U);
+    HAL_NVIC_EnableIRQ(DMA1_Stream6_IRQn);
 }
 
-void SerialDriver::transmit_complete()
-{
-    _transmitted.release();
-}
+extern "C" void DMA1_Stream6_IRQHandler(void) { HAL_DMA_IRQHandler(&g_usart2_tx_dma); }
 
 extern "C" void HAL_UART_TxCpltCallback(UART_HandleTypeDef* huart)
 {

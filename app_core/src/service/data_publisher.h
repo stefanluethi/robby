@@ -3,43 +3,47 @@
 #include "conf/log.h"
 #include "distance_visualizer.h"
 #include "imu.h"
-#include "trace/thread_table.h"
+#include "service/bench_load.h"
+#include "trace/link.h"
+#include "trace/records.h"
 
 #include <array>
 
+#include <robby_link.pb.h>
 #include <rtos/rtos.h>
 #include <se-oss/log/LogRegistry.h>
-#include <sonde/sonde.hpp>
 
 namespace robby {
 
+/// Sends the measurements, the logs and the status of the robot as records over the link,
+/// the outpost turns them into blip traces (proto/README.md).
 class DataPublisher
 {
 public:
     explicit DataPublisher(
         se_oss::LogRegistry<LogContextId, LogSinkId>& log_registry,
-        sonde::Tracer& tracer,
+        Link& link,
         rtos::MessageQueue<AccelerationFrame>& accelerationFrames,
         rtos::MessageQueue<fuelgauge_status_t>& battery,
-        DistanceMap& distance_map
+        DistanceMap& distance_map,
+        BenchLoad& bench_load
     );
 
     void publish();
 
 private:
     static constexpr uint32_t PUBLISH_INTERVAL_SLOW {1000U};
-    /// Only every n-th acceleration sample is traced, the link is too slow for all
-    static constexpr std::size_t ACCELERATION_DECIMATION {2U};
-    static constexpr float ACCELERATION_SCALE_G {0.000061F};
+    static constexpr std::size_t MAX_TASKS {16U};
 
     se_oss::LogRegistry<LogContextId, LogSinkId>& _log_registry;
-    sonde::Tracer& _tracer;
+    Link& _link;
+    /// Filled for one record after the other
+    robby_link_Record _record {};
 
     // Message buffers
     rtos::MessageQueue<AccelerationFrame>& _acceleration_frames;
     AccelerationFrame _acceleration_frame {};
-    /// When the previous frame was read, 0 if it was not read right before this one
-    uint64_t _last_acceleration_timestamp_ns {0U};
+    records::ImuBatcher _imu_batcher {};
 
     rtos::MessageQueue<fuelgauge_status_t>& _battery;
     fuelgauge_status_t _battery_status {};
@@ -47,16 +51,13 @@ private:
     DistanceMap& _distance_map;
     std::array<DistanceSensorImage, 3> _sensors {};
 
-    ThreadTable _thread_table {};
-    std::array<TaskStatus_t, 16> _task_status {};
+    BenchLoad& _bench_load;
+
+    std::array<TaskStatus_t, MAX_TASKS> _task_status {};
 
     uint32_t _last_publish_tick {0U};
 
-    void publish_acceleration();
-    void publish_distances();
-    void publish_battery();
-    void publish_threads();
-    void update_thread_table();
+    void publish_tasks(uint64_t t_ns);
 };
 
 }  // namespace robby

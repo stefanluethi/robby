@@ -1,6 +1,7 @@
 #pragma once
 
 #include "se-oss/log/Log.h"
+#include "service/samples.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -15,7 +16,6 @@ extern "C" {
 
 namespace robby {
 
-using DistanceSensorImage = std::array<std::array<int16_t, 8>, 8>;
 struct DistanceMap
 {
     std::array<DistanceSensorImage, 3> sensors {};

@@ -14,11 +14,13 @@ using namespace robby;
 Imu::Imu(
     se_oss::Logger log,
     rtos::MessageQueue<AccelerationFrame>& frames,
-    rtos::MessageQueue<fuelgauge_status_t>& battery
+    rtos::MessageQueue<fuelgauge_status_t>& battery,
+    std::atomic<uint32_t>& dropped_frames
     ) :
     _log{std::move(log)},
     _frames{frames},
-    _battery{battery}
+    _battery{battery},
+    _dropped_frames{dropped_frames}
 {
     LSM6DSO_IO_t io_ctx;
 
@@ -188,7 +190,7 @@ void Imu::read_fifo(uint16_t num_words)
             _acceleration_frame.timestamp_ns = uptime_ns();
             _acceleration_frame.size = _acceleration_frame.x.size();
             if (!_frames.trySend(_acceleration_frame)) {
-                // message something
+                _dropped_frames.fetch_add(1U, std::memory_order_relaxed);
             }
         }
     }
