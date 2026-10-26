@@ -2,31 +2,17 @@
 
 #include "driver/fuelgauge.h"
 #include "lsm6dso.h"
+#include "service/samples.h"
 
 #include <rtos/rtos.h>
 #include <se-oss/log/Log.h>
 
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 
 namespace robby {
-
-constexpr uint64_t ACCELERATION_SAMPLE_PERIOD_NS {1'000'000'000U / 833U};
-
-template<std::size_t N>
-struct Acceleration
-{
-    /// Uptime when the last sample was read
-    uint64_t timestamp_ns {};
-    /// Number of valid samples
-    std::size_t size {};
-    std::array<int16_t, N> x {};
-    std::array<int16_t, N> y {};
-    std::array<int16_t, N> z {};
-};
-
-using AccelerationFrame = Acceleration<100>;
 
 /// Reads the IMU, and the battery gauge as it shares I2C2: one task owns the bus, so that
 /// the speed of the bus can be switched for the gauge between two IMU transfers.
@@ -35,7 +21,8 @@ public:
     Imu(
         se_oss::Logger log,
         rtos::MessageQueue<AccelerationFrame>& frames,
-        rtos::MessageQueue<fuelgauge_status_t>& battery
+        rtos::MessageQueue<fuelgauge_status_t>& battery,
+        std::atomic<uint32_t>& dropped_frames
     );
     void start();
     void process();
@@ -61,6 +48,8 @@ private:
     uint32_t _last_sample_tick {0U};
     rtos::MessageQueue<AccelerationFrame>& _frames;
     rtos::MessageQueue<fuelgauge_status_t>& _battery;
+    /// Frames lost because the queue was full, counted by the link
+    std::atomic<uint32_t>& _dropped_frames;
     uint32_t _last_battery_tick {0U};
     bool _battery_failed {false};
 };

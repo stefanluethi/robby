@@ -55,30 +55,6 @@ target_link_libraries(stm32cubef7 INTERFACE stm32cube7_utils)
 
 add_library(st::cubef7 ALIAS stm32cubef7)
 
-## tinycbor ####################################################################
-
-set(WITH_FLOATING_POINT OFF CACHE BOOL "" FORCE)
-set(WITH_CBOR2JSON OFF CACHE BOOL "" FORCE)
-set(WITH_TOOLS OFF CACHE BOOL "" FORCE)
-FetchContent_Declare(
-        tinycbor
-        GIT_REPOSITORY https://github.com/intel/tinycbor.git
-        GIT_TAG v7.0
-)
-FetchContent_MakeAvailable(tinycbor)
-
-## sonde #######################################################################
-# Tracing library of blip, https://github.com/stefanluethi/blip
-
-set(SONDE_FETCH_TINYCBOR OFF CACHE BOOL "" FORCE)
-FetchContent_Declare(
-        blip
-        GIT_REPOSITORY https://github.com/stefanluethi/blip.git
-        GIT_TAG        96ff5b275561eb4b5403ea92b86733a48edd7971
-        SOURCE_SUBDIR  sonde
-)
-FetchContent_MakeAvailable(blip)
-
 ## se-oss ######################################################################
 
 add_library(se_oss_log_conf INTERFACE)
@@ -152,15 +128,3 @@ target_link_libraries(
 )
 
 add_library(segger::systemview ALIAS segger_systemview)
-
-## nanocobs ####################################################################
-
-FetchContent_Declare(
-        nanocobs
-        GIT_REPOSITORY https://github.com/charlesnicholson/nanocobs.git
-        GIT_TAG        v0.2.0
-)
-FetchContent_MakeAvailable(nanocobs)
-
-add_library(nanocobs STATIC ${nanocobs_SOURCE_DIR}/cobs.c)
-target_include_directories(nanocobs PUBLIC ${nanocobs_SOURCE_DIR})

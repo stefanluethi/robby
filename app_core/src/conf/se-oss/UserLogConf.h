@@ -8,7 +8,7 @@
 namespace se_oss {
 
 /// Formats a log record as its timestamp (uint64_t, native byte order) followed by the
-/// message text, which robby::LogSink hands on to sonde.
+/// message text, which robby::LogSink sends as a LogRecord.
 class RobbyFormatter
 {
 public:

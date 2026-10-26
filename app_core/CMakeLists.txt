@@ -52,6 +52,9 @@ add_executable(
 
 add_subdirectory(lib)
 
+# nanopb, the code generated from ../proto and the portable part of the trace path
+include(cmake/robby_link.cmake)
+
 # Add STM32CubeMX generated sources
 add_subdirectory(cmake/stm32cubemx)
 # remove conflicting DEBUG symbol again
@@ -80,12 +83,11 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
         stm32cubemx
         st::tof::vl53l8cx
         st::cubef7
-        tinycbor
+        robby_link_core
         m
         freertos_kernel
         segger::systemview
         rtos_cpp
         se_oss::log
         nanocobs
-        sonde::sonde
 )
