@@ -18,7 +18,7 @@ public:
     static constexpr uint32_t MAX_RATE {100'000U};
     static constexpr uint32_t MAX_BATCH {100U};
     static constexpr uint32_t DEFAULT_BATCH {100U};
-    /// Samples that are due longer than this are dropped instead of sent late
+    /// Batches whose last sample is due longer than this are dropped instead of sent late
     static constexpr uint64_t MAX_BACKLOG_NS {100'000'000U};
 
     /// Sets the load, a rate of 0 stops it. `batch` 0 takes the default. Returns why the

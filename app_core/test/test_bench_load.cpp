@@ -3,6 +3,7 @@
 #include "trace/crc16.h"
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 
 #include <pb_encode.h>
 
@@ -109,7 +110,55 @@ TEST_CASE("A bench load that falls behind drops batches instead of sending them 
     CHECK(out.size() <= 11U);
     CHECK(dropped >= 89U);
     CHECK(out.size() + dropped >= 99U);
-    CHECK(now - out.front().kind.synthetic.t_first_ns <= BenchLoad::MAX_BACKLOG_NS);
+    // measured at the last sample of each batch
+    const auto& first = out.front().kind.synthetic;
+    CHECK(now - (first.t_first_ns + 99U * first.period_ns) <= BenchLoad::MAX_BACKLOG_NS);
+    // the batch before the first one sent was too late
+    CHECK(now - (first.t_first_ns - first.period_ns) > BenchLoad::MAX_BACKLOG_NS);
+}
+
+TEST_CASE("Batches that span the backlog limit or more aren't dropped")
+{
+    // 99 ms per batch at 1000/s (the bench's first ramp step), 198 ms at 500/s, 1.98 s at 50/s
+    const uint32_t rate {GENERATE(1'000U, 500U, 50U)};
+    CAPTURE(rate);
+
+    BenchLoad load {};
+    REQUIRE(load.configure(rate, 100U) == nullptr);
+
+    uint64_t now {START_NS};
+    uint32_t dropped {0U};
+    // the publisher runs every 10 ms
+    const auto records = run(load, now, 20'000'000'000U, &dropped);
+
+    CHECK(dropped == 0U);
+    // 20 s worth of samples, the last batch may not be due yet
+    const std::size_t expected {rate * 20U / 100U};
+    CHECK(records.size() >= expected - 1U);
+    CHECK(records.size() <= expected + 1U);
+
+    uint64_t next {START_NS};
+    for (const auto& record : records) {
+        CHECK(record.kind.synthetic.t_first_ns == next);
+        next += 100U * record.kind.synthetic.period_ns;
+    }
+}
+
+TEST_CASE("A publisher a bit slower than the batches drops nothing")
+{
+    BenchLoad load {};
+    REQUIRE(load.configure(1'000U, 100U) == nullptr);
+
+    // every 37 ms, a few batches due at once now and then
+    uint64_t now {START_NS};
+    uint32_t dropped {0U};
+    std::size_t sent {0U};
+    robby_link_Record record {};
+    for (; now <= START_NS + 10'000'000'000U; now += 37'000'000U) {
+        dropped += load.generate(now, record, [&](const robby_link_Record&) { ++sent; });
+    }
+    CHECK(dropped == 0U);
+    CHECK(sent >= 99U);
 }
 
 TEST_CASE("Rate 0 stops the bench load")

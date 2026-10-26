@@ -35,16 +35,19 @@ bool BenchLoad::next(uint64_t now_ns, robby_link_Record& record, uint32_t& dropp
     const uint64_t period_ns {1'000'000'000U / rate};
     const uint64_t batch_ns {batch * period_ns};
 
-    // the last sample of the batch must be due
-    if (_next_ns + batch_ns - period_ns > now_ns) {
+    // a batch is due once its last sample is, and late by as long as that one waited
+    const uint64_t last_sample_ns {batch_ns - period_ns};
+    if (_next_ns + last_sample_ns > now_ns) {
         return false;
     }
-    if (now_ns - _next_ns > MAX_BACKLOG_NS) {
-        const uint64_t skipped {(now_ns - _next_ns - MAX_BACKLOG_NS) / batch_ns + 1U};
+    const uint64_t late_ns {now_ns - (_next_ns + last_sample_ns)};
+    if (late_ns > MAX_BACKLOG_NS) {
+        // skips the batches whose last sample is more than MAX_BACKLOG_NS late, no more
+        const uint64_t skipped {(late_ns - MAX_BACKLOG_NS - 1U) / batch_ns + 1U};
         dropped += static_cast<uint32_t>(skipped);
         _next_ns += skipped * batch_ns;
         _sample += static_cast<uint32_t>(skipped * batch);
-        if (_next_ns + batch_ns - period_ns > now_ns) {
+        if (_next_ns + last_sample_ns > now_ns) {
             return false;
         }
     }
