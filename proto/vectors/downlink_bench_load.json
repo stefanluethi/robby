@@ -1,0 +1,16 @@
+{
+  "description": "Invoke bench/load {rate: 20000, batch: 100}",
+  "type": "robby.link.Downlink",
+  "payload_bytes": 14,
+  "frame_bytes": 18,
+  "value": {
+    "seq": 9,
+    "invoke": {
+      "id": 3,
+      "bench_load": {
+        "rate": 20000,
+        "batch": 100
+      }
+    }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "description": "seq 0 (first frame after a reset) without records: 0 protobuf bytes",
+  "type": "robby.link.Uplink",
+  "payload_bytes": 0,
+  "frame_bytes": 4,
+  "value": {
+    "seq": 0,
+    "records": []
+  }
+}

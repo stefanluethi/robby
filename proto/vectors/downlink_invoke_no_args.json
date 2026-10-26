@@ -1,0 +1,12 @@
+{
+  "description": "an Invoke without args: the STM32 answers \"unknown action\"",
+  "type": "robby.link.Downlink",
+  "payload_bytes": 6,
+  "frame_bytes": 10,
+  "value": {
+    "seq": 10,
+    "invoke": {
+      "id": 4
+    }
+  }
+}

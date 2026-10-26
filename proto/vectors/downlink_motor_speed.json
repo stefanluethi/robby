@@ -1,0 +1,15 @@
+{
+  "description": "Invoke motor/speed {speed: 500}",
+  "type": "robby.link.Downlink",
+  "payload_bytes": 11,
+  "frame_bytes": 15,
+  "value": {
+    "seq": 7,
+    "invoke": {
+      "id": 1,
+      "motor_speed": {
+        "speed": 500
+      }
+    }
+  }
+}

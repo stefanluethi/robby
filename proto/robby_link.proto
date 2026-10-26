@@ -1,0 +1,203 @@
+// The link between the STM32 (app_core) and the ESP32 outpost (app_comm).
+//
+// Each UART frame carries one Uplink (STM32 -> ESP32) or one Downlink (ESP32 -> STM32),
+// followed by a CRC-16 and COBS-encoded, see README.md for the frame layout, the blip
+// paths the outpost makes of each record, and the versioning rule:
+//
+//   Fields and messages are only ever added. A field number is never reused, renumbered
+//   or given another type; a field that goes away is marked `reserved`.
+//
+// Conventions:
+// - Values are raw integer counts in the units named by the field (`_ns`, `_mv`, ...);
+//   the outpost scales them for blip. No floats, no strings on the hot path.
+// - Times are the STM32 uptime in ns, the time domain of all traces.
+// - Field numbers 1-15 (one byte tags) for everything sent often.
+// - The size limits of repeated and string fields are in robby_link.options (nanopb) and
+//   robby_link.toml (micropb); both must agree.
+
+syntax = "proto3";
+
+package robby.link;
+
+// ---------------------------------------------------------------------------------------
+// STM32 -> ESP32
+// ---------------------------------------------------------------------------------------
+
+// One per frame.
+message Uplink {
+  // 0 for the first frame after a reset of the STM32, +1 per frame, wraps at 2^32.
+  // Gaps show frames lost on the UART, see README.md.
+  uint32 seq = 1;
+  // In the order they were produced. The encoder adds records until the next one would
+  // make the frame larger than 1 KiB; any single record fits into an empty frame.
+  repeated Record records = 2;
+}
+
+message Record {
+  oneof kind {
+    ImuBatch imu = 1;
+    DistanceImage distance = 2;
+    Battery battery = 3;
+    TaskStats task = 4;
+    LogRecord log = 5;
+    ActionResult action_result = 6;
+    LinkStats link_stats = 7;
+    // Load generator, see BenchLoad.
+    Synthetic synthetic = 15;
+  }
+}
+
+// Consecutive samples of the accelerometer (LSM6DSO, +-2 g, 0.061 mg/LSB).
+// Sample i was taken at t_first_ns + i * period_ns.
+message ImuBatch {
+  uint64 t_first_ns = 1;
+  uint32 period_ns = 2;
+  // Raw counts, the same number of samples in each axis (at most 100).
+  repeated sint32 x = 3 [packed = true];
+  repeated sint32 y = 4 [packed = true];
+  repeated sint32 z = 5 [packed = true];
+}
+
+// One measurement of the three VL53L8CX time-of-flight sensors.
+message DistanceImage {
+  uint64 t_ns = 1;
+  // Distances in mm, -1 where a zone has no valid target. 3 sensors x 8 x 8 zones in the
+  // order of app_core's DistanceMap::sensors[s][x][y]: index = (s * 8 + x) * 8 + y, where
+  // s = 0 is the left sensor, 1 the middle, 2 the right, and x + 8 * y is the VL53L8CX
+  // zone number.
+  repeated sint32 mm = 2 [packed = true];
+}
+
+// What the fuel gauge (BQ28Z620) reports, about once per second.
+message Battery {
+  uint64 t_ns = 1;
+  // Relative state of charge in %
+  uint32 soc_pct = 2;
+  uint32 voltage_mv = 3;
+  uint32 cell1_mv = 4;
+  uint32 cell2_mv = 5;
+  // Positive while charging, negative while discharging
+  sint32 current_ma = 6;
+}
+
+// One FreeRTOS task, all tasks once per second, one record each.
+message TaskStats {
+  uint64 t_ns = 1;
+  // At most 15 characters (configMAX_TASK_NAME_LEN 16)
+  string name = 2;
+  uint32 priority = 3;
+  // Share of the CPU time since boot in 0.01 % (10000 = 100 %)
+  uint32 runtime_bp = 4;
+  // FreeRTOS counts the stack in words: times sizeof(StackType_t)
+  uint32 stack_size_bytes = 5;
+  // The smallest number of stack bytes that were ever unused (high water mark)
+  uint32 stack_free_min_bytes = 6;
+}
+
+// The levels of se-oss, which match blip's up to ERROR.
+enum LogLevel {
+  LOG_LEVEL_TRACE = 0;
+  LOG_LEVEL_DEBUG = 1;
+  LOG_LEVEL_INFO = 2;
+  LOG_LEVEL_WARN = 3;
+  LOG_LEVEL_ERROR = 4;
+  LOG_LEVEL_FATAL = 5;
+}
+
+// The log contexts of app_core (robby::LogContextId), the outpost names them for blip.
+enum Component {
+  COMPONENT_CMD = 0;
+  COMPONENT_SPACE = 1;
+  COMPONENT_IMU = 2;
+}
+
+message LogRecord {
+  // Set by the STM32 also for records without a time of their own (it uses the uptime).
+  uint64 t_ns = 1;
+  LogLevel level = 2;
+  Component component_id = 3;
+  // UTF-8, at most 255 bytes
+  string message = 4;
+}
+
+// The answer to an Invoke.
+message ActionResult {
+  // The id of the Invoke
+  uint32 id = 1;
+  // Empty: the action was carried out. Otherwise why it was rejected, at most 63 bytes.
+  string error = 2;
+}
+
+// Counters of the STM32 side of the link, once per second. All counters count up from 0
+// after a reset and wrap at 2^32: the outpost uses the differences between two records.
+message LinkStats {
+  uint64 t_ns = 1;
+  // Bytes written to the UART, with COBS overhead and delimiters
+  uint32 tx_bytes = 2;
+  uint32 tx_frames = 3;
+  // Time spent writing frames, including waiting for room in the TX buffer, in us
+  uint32 tx_write_us = 4;
+  // Longest single write since the previous LinkStats, in us (not a counter)
+  uint32 tx_write_max_us = 5;
+  // Frames that were not sent because the TX buffer or queue was full
+  uint32 tx_frames_dropped = 6;
+  // Records that were not encoded because their queue was full
+  uint32 records_dropped = 7;
+  // Downlink frames received and decoded
+  uint32 rx_frames = 8;
+  // Downlink frames rejected: COBS, CRC, size or protobuf errors
+  uint32 rx_errors = 9;
+  // Downlink frames missing by their seq
+  uint32 rx_seq_gaps = 10;
+  // Current UART baud rate, for the load: tx bytes/s / (baud / 10)
+  uint32 baud = 11;
+}
+
+// Synthetic samples of the load generator. The same fields as ImuBatch, so it can be
+// decoded as one; the outpost sends it to blip like the IMU, so it costs the same on WiFi.
+message Synthetic {
+  uint64 t_first_ns = 1;
+  uint32 period_ns = 2;
+  repeated sint32 x = 3 [packed = true];
+  repeated sint32 y = 4 [packed = true];
+  repeated sint32 z = 5 [packed = true];
+}
+
+// ---------------------------------------------------------------------------------------
+// ESP32 -> STM32
+// ---------------------------------------------------------------------------------------
+
+// One per frame.
+message Downlink {
+  // +1 per frame from the outpost, wraps at 2^32
+  uint32 seq = 1;
+  oneof kind {
+    Invoke invoke = 2;
+  }
+}
+
+// An action blip invoked, with typed arguments. The STM32 answers with an ActionResult
+// of the same id, also when it rejects it (e.g. no args: "unknown action").
+message Invoke {
+  // Chosen by blip; the outpost passes it on unchanged
+  uint32 id = 1;
+  // One per action, the blip path of each is in README.md
+  oneof args {
+    MotorSpeed motor_speed = 2;
+    BenchLoad bench_load = 3;
+  }
+}
+
+// "motor/speed": duty cycle of the motor PWM
+message MotorSpeed {
+  // 0..1000 per mille
+  uint32 speed = 1;
+}
+
+// "bench/load": Synthetic records on top of the normal stream
+message BenchLoad {
+  // Samples per second, 0 stops the load generator
+  uint32 rate = 1;
+  // Samples per Synthetic record, 1..100; 0 for the STM32's default (100)
+  uint32 batch = 2;
+}
