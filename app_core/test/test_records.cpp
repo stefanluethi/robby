@@ -116,14 +116,14 @@ TEST_CASE("The distance map becomes the DistanceImage of the vector")
     const auto json = read_json("uplink_distance");
     const auto& distance = json["value"]["records"][0]["distance"];
 
-    // sensors[s][x][y] = mm[(s * 8 + x) * 8 + y]
+    // sensors[s][y][x] = mm[(s * 8 + y) * 8 + x]
     std::array<DistanceSensorImage, 3> sensors {};
     for (std::size_t s = 0; s < 3U; ++s) {
-        for (std::size_t x = 0; x < 8U; ++x) {
-            for (std::size_t y = 0; y < 8U; ++y) {
+        for (std::size_t y = 0; y < 8U; ++y) {
+            for (std::size_t x = 0; x < 8U; ++x) {
                 // the sensors report other negative values for invalid zones too
-                const int16_t mm {distance["mm"][(s * 8U + x) * 8U + y].get<int16_t>()};
-                sensors[s][x][y] = mm < 0 ? int16_t {-7} : mm;
+                const int16_t mm {distance["mm"][(s * 8U + y) * 8U + x].get<int16_t>()};
+                sensors[s][y][x] = mm < 0 ? int16_t {-7} : mm;
             }
         }
     }

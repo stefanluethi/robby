@@ -62,7 +62,7 @@ message ImuBatch {
 message DistanceImage {
   uint64 t_ns = 1;
   // Distances in mm, -1 where a zone has no valid target. 3 sensors x 8 x 8 zones in the
-  // order of app_core's DistanceMap::sensors[s][x][y]: index = (s * 8 + x) * 8 + y, where
+  // order of app_core's DistanceMap::sensors[s][y][x]: index = (s * 8 + y) * 8 + x, where
   // s = 0 is the left sensor, 1 the middle, 2 the right, and x + 8 * y is the VL53L8CX
   // zone number.
   repeated sint32 mm = 2 [packed = true];

@@ -91,7 +91,7 @@ All times are the STM32 uptime in ns. The outpost passes them on as the blip
 | Record | blip path | blip value | Conversion |
 |---|---|---|---|
 | `ImuBatch` | `imu/acc` | record `{x, y, z}`, floats in g, one `Value` per sample | `raw × 0.000061`; sample `i` at `t_first_ns + i × period_ns` |
-| `DistanceImage` | `tof/distance` | array of 24 arrays of 8: int mm or `null` | `mm` cut into arrays of 8, in order: `tof/distance[s × 8 + x][y]` = `mm[(s × 8 + x) × 8 + y]` (s 0 left, 1 middle, 2 right; zone `x + 8y`), today's layout; `mm < 0` → `null` |
+| `DistanceImage` | `tof/distance` | array of 24 arrays of 8: int mm or `null` | `mm` cut into arrays of 8, in order: `tof/distance[s × 8 + y][x]` = `mm[(s × 8 + y) × 8 + x]` (s 0 left, 1 middle, 2 right; zone `x + 8y`), today's layout; `mm < 0` → `null` |
 | `Battery` | `battery/soc` | int, % | `soc_pct` |
 | | `battery/voltage` | float, V | `voltage_mv / 1000` |
 | | `battery/cell1`, `battery/cell2` | float, V | `cell1_mv / 1000`, `cell2_mv / 1000` |

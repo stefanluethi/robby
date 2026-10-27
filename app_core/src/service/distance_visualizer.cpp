@@ -92,7 +92,7 @@ void DistanceVisualizer::process()
                 if (status == 5U || status == 9U) {
                     distance = _results[sensor_index].distance_mm[cell];
                 }
-                _distance_map.sensors[i][x][y] = distance;
+                _distance_map.sensors[i][y][x] = distance;
             }
         }
     }

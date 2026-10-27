@@ -144,10 +144,10 @@ pub fn expected(json: &Json) -> Vec<Message> {
                 assert_eq!(mm.len(), 192);
                 let mut rows = Vec::new();
                 for s in 0..3 {
-                    for x in 0..8 {
+                    for y in 0..8 {
                         let row = (0..8)
-                            .map(|y| {
-                                let d = mm[(s * 8 + x) * 8 + y];
+                            .map(|x| {
+                                let d = mm[(s * 8 + y) * 8 + x];
                                 if d < 0 { Data::Null } else { uint(d as u64) }
                             })
                             .collect();
