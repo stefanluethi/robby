@@ -182,6 +182,19 @@ def test_the_drive_record_is_motor_in_mm_s(schema):
     }
 
 
+def test_the_pose_record_is_pose_in_mm_and_degrees(schema):
+    sent, _, content = translate(schema, "uplink_pose")
+    p = content["records"][0]["pose"]
+    t = p["t_ns"]
+    got = {path: (value, ts) for path, value, ts in values(sent)}
+    assert got == {
+        "pose/x": (p["x_mm"], t),
+        "pose/y": (p["y_mm"], t),
+        "pose/heading": (pytest.approx(p["heading_cdeg"] / 100), t),
+    }
+    assert units(sent) == {"pose/x": "mm", "pose/y": "mm", "pose/heading": "°"}
+
+
 def test_log_records_and_action_results(schema):
     sent, results, content = translate(schema, "uplink_log")
     log = content["records"][0]["log"]

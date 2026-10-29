@@ -1,0 +1,19 @@
+{
+  "description": "a Pose record: the position from the wheel encoders",
+  "type": "robby.link.Uplink",
+  "payload_bytes": 23,
+  "frame_bytes": 27,
+  "value": {
+    "seq": 5,
+    "records": [
+      {
+        "pose": {
+          "t_ns": 3602020000000,
+          "x_mm": 1234,
+          "y_mm": -350,
+          "heading_cdeg": -17950
+        }
+      }
+    ]
+  }
+}

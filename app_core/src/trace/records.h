@@ -2,6 +2,7 @@
 
 #include "driver/fuelgauge.h"
 #include "service/drive_control.h"
+#include "service/odometry.h"
 #include "service/samples.h"
 
 #include <array>
@@ -69,6 +70,9 @@ private:
 };
 
 void make_drive(const drive::Sample& sample, robby_link_Record& record);
+
+/// The pose rounded to mm and hundredths of a degree
+void make_pose(uint64_t t_ns, const drive::Pose& pose, robby_link_Record& record);
 
 /// `level` and `component` are the numbers of se_oss::LogLevel and robby::LogContextId,
 /// which match robby_link_LogLevel and robby_link_Component. The message is cut to 255

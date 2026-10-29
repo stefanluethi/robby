@@ -68,7 +68,12 @@ void Drive::run()
 
     drive::Sample sample {};
     sample.t_ns = uptime_ns();
-    sample.speed = {.left = measure(_left), .right = measure(_right)};
+    const int32_t left_counts {measure(_left)};
+    const int32_t right_counts {measure(_right)};
+    sample.speed = {
+        .left = drive::speed_of(left_counts, drive::PERIOD_MS),
+        .right = drive::speed_of(right_counts, drive::PERIOD_MS),
+    };
     sample.counts = {.left = _left.counts, .right = _right.counts};
 
     if (speed == 0 && turn == 0) {
@@ -89,8 +94,12 @@ void Drive::run()
     apply(_left.motor, sample.duty.left);
     apply(_right.motor, sample.duty.right);
 
+    _odometry.update(left_counts, right_counts);
+
     // sent with the next flush of the data publisher
     records::make_drive(sample, _record);
+    _link.add(_record);
+    records::make_pose(sample.t_ns, _odometry.pose(), _record);
     _link.add(_record);
 }
 
@@ -104,7 +113,7 @@ int32_t Drive::measure(Wheel& wheel)
     }
     // wraps like the int32 of the record
     wheel.counts = static_cast<int32_t>(static_cast<uint32_t>(wheel.counts) + static_cast<uint32_t>(counts));
-    return drive::speed_of(counts, drive::PERIOD_MS);
+    return counts;
 }
 
 void Drive::apply(const Motor& motor, int32_t duty)

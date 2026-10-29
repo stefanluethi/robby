@@ -1,7 +1,9 @@
 #include "records.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
+#include <numbers>
 
 using namespace robby;
 
@@ -101,6 +103,17 @@ void records::make_drive(const drive::Sample& sample, robby_link_Record& record)
     out.right_duty = sample.duty.right;
     out.left_counts = sample.counts.left;
     out.right_counts = sample.counts.right;
+}
+
+void records::make_pose(uint64_t t_ns, const drive::Pose& pose, robby_link_Record& record)
+{
+    record = robby_link_Record_init_zero;
+    record.which_kind = robby_link_Record_pose_tag;
+    auto& out = record.kind.pose;
+    out.t_ns = t_ns;
+    out.x_mm = static_cast<int32_t>(std::lround(pose.x_mm));
+    out.y_mm = static_cast<int32_t>(std::lround(pose.y_mm));
+    out.heading_cdeg = static_cast<int32_t>(std::lround(pose.heading_rad * (18000.0F / std::numbers::pi_v<float>)));
 }
 
 void records::make_task(uint64_t t_ns, const TaskInfo& task, robby_link_Record& record)

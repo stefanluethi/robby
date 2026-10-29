@@ -5,6 +5,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <cstring>
+#include <numbers>
 #include <string>
 
 using namespace test;
@@ -345,4 +346,32 @@ TEST_CASE("A drive sample becomes the Drive record of the vector")
 
     CHECK(to_json(record) == json["value"]["records"][0]);
     CHECK(frame_with(json["value"]["seq"].get<uint32_t>(), record) == read_vector("uplink_drive.frame"));
+}
+
+TEST_CASE("A pose becomes the Pose record of the vector, rounded to mm and 0.01 degree")
+{
+    const auto json = read_json("uplink_pose");
+    const auto& p = json["value"]["records"][0]["pose"];
+
+    const drive::Pose pose {
+        .x_mm = static_cast<float>(p["x_mm"].get<int32_t>()) + 0.4F,
+        .y_mm = static_cast<float>(p["y_mm"].get<int32_t>()) - 0.4F,
+        .heading_rad = static_cast<float>(p["heading_cdeg"].get<int32_t>()) * std::numbers::pi_v<float> / 18000.0F,
+    };
+    robby_link_Record record {};
+    records::make_pose(p["t_ns"].get<uint64_t>(), pose, record);
+
+    CHECK(to_json(record) == json["value"]["records"][0]);
+    CHECK(frame_with(json["value"]["seq"].get<uint32_t>(), record) == read_vector("uplink_pose.frame"));
+}
+
+TEST_CASE("A heading of pi is 180 degrees")
+{
+    robby_link_Record record {};
+    records::make_pose(0U, {.x_mm = 0.0F, .y_mm = 0.0F, .heading_rad = std::numbers::pi_v<float>}, record);
+    CHECK(record.kind.pose.heading_cdeg == 18000);
+    records::make_pose(0U, {.x_mm = -0.6F, .y_mm = 0.5F, .heading_rad = -std::numbers::pi_v<float>}, record);
+    CHECK(record.kind.pose.heading_cdeg == -18000);
+    CHECK(record.kind.pose.x_mm == -1);
+    CHECK(record.kind.pose.y_mm == 1);
 }

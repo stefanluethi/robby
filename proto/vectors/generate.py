@@ -236,6 +236,10 @@ def vectors(c: dict[str, type[message.Message]]) -> list[tuple[str, str, message
         )
     )
 
+    # 1.2 m ahead, 0.35 m to the right, facing back and a bit to the left
+    pose = U(seq=5)
+    pose.records.add(pose=c["Pose"](t_ns=3_602_020_000_000, x_mm=1_234, y_mm=-350, heading_cdeg=-17_950))
+
     full_imu = U(seq=1)
     full_imu.records.add(imu=imu)
     worst = U(seq=2**32 - 1)
@@ -254,6 +258,7 @@ def vectors(c: dict[str, type[message.Message]]) -> list[tuple[str, str, message
         ("uplink_log", "a log record, an ActionResult ok and one with an error", log),
         ("uplink_synthetic", "a Synthetic batch of 50 samples", synth),
         ("uplink_drive", "a Drive record: the speed loop of both wheels", drive),
+        ("uplink_pose", "a Pose record: the position from the wheel encoders", pose),
         ("downlink_motor_drive", "Invoke motor/drive {speed: 200, turn: -50}",
          D(seq=7, invoke=I(id=1, motor_drive=c["MotorDrive"](speed=200, turn=-50)))),
         ("downlink_motor_drive_zero", "Invoke motor/drive {speed: 0, turn: 0}: an empty MotorDrive that is set",

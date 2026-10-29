@@ -40,6 +40,7 @@ add_executable(
         test_records.cpp
         test_bench_load.cpp
         test_drive_control.cpp
+        test_odometry.cpp
         support.cpp
 )
 target_compile_options(app_core_tests PRIVATE -Wall -Wextra)

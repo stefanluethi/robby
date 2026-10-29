@@ -236,6 +236,13 @@ json test::to_json(const robby_link_Record& record)
                   {"right_counts", d.right_counts}}}
             };
         }
+        case robby_link_Record_pose_tag: {
+            const auto& p = kind.pose;
+            return {
+                {"pose",
+                 {{"t_ns", p.t_ns}, {"x_mm", p.x_mm}, {"y_mm", p.y_mm}, {"heading_cdeg", p.heading_cdeg}}}
+            };
+        }
         default: return json::object();
     }
 }

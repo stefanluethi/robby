@@ -2,6 +2,7 @@
 
 #include "main.h"
 #include "service/drive_control.h"
+#include "service/odometry.h"
 #include "trace/link.h"
 
 #include <cstdint>
@@ -13,7 +14,8 @@ namespace robby {
 
 /// Holds the speed of both wheels with their encoders (MotorDrive), every 20 ms, and sends
 /// a Drive record each period. While speed and turn are both 0 the motor driver sleeps, so
-/// the wheels turn freely.
+/// the wheels turn freely. Tracks the position of the robot from the same counts and sends
+/// it as a Pose record each period, also while the wheels coast.
 class Drive
 {
 public:
@@ -56,10 +58,12 @@ private:
     int32_t _speed {0};
     int32_t _turn {0};
 
+    drive::Odometry _odometry {};
+
     TickType_t _last_wake {0U};
     robby_link_Record _record {};
 
-    /// Reads the encoder: the speed over the last period in mm/s
+    /// Reads the encoder: the counts over the last period, positive forward
     static int32_t measure(Wheel& wheel);
     static void apply(const Motor& motor, int32_t duty);
 };
