@@ -46,7 +46,7 @@ void App::launch()
     auto* battery = new rtos::MessageQueue<fuelgauge_status_t>(1);
     auto* distance_map = new DistanceMap();
     auto* bench_load = new BenchLoad();
-    auto* drive = new Drive(*link);
+    auto* drive = new Drive(log_registry->createLogger(LogContextId::DRIVE), *link);
 
     // Services ----------------------------------------------------------------
     auto* command_handler = new CommandHandler(log_registry->createLogger(LogContextId::COMMAND), *link, *drive, *bench_load);

@@ -77,6 +77,38 @@ private:
     float _integral {0.0F};
 };
 
+/// Notices a wheel the loop has lost: one that turns against its duty (the encoder counts
+/// the wrong way, so the loop drives it ever faster), or one that doesn't move at full duty
+/// (no encoder counts, or blocked).
+class RunawayCheck
+{
+public:
+    enum class Fault
+    {
+        NONE,
+        /// Turned against its duty for AGAINST_PERIODS periods in a row
+        AGAINST_DUTY,
+        /// Stood still at full duty for STILL_PERIODS periods in a row
+        STILL_AT_FULL_DUTY,
+    };
+
+    /// Duty and speed must have opposite signs with at least these magnitudes
+    static constexpr int32_t AGAINST_MIN_DUTY {200};
+    static constexpr int32_t AGAINST_MIN_SPEED {30};
+    /// 100 ms at 50 Hz
+    static constexpr uint32_t AGAINST_PERIODS {5U};
+    /// 1 s at 50 Hz
+    static constexpr uint32_t STILL_PERIODS {50U};
+
+    /// Once per period with the duty set in the period before and the speed it gave
+    Fault update(int32_t duty, int32_t speed);
+    void reset();
+
+private:
+    uint32_t _against {0U};
+    uint32_t _still {0U};
+};
+
 /// One period of the loop of both wheels, for the Drive record
 struct Sample
 {

@@ -27,6 +27,29 @@ int32_t drive::speed_of(int32_t counts, uint32_t period_ms)
     return static_cast<int32_t>(um_per_s / 1000);
 }
 
+drive::RunawayCheck::Fault drive::RunawayCheck::update(int32_t duty, int32_t speed)
+{
+    const bool against {
+        std::abs(duty) >= AGAINST_MIN_DUTY && std::abs(speed) >= AGAINST_MIN_SPEED && (duty > 0) != (speed > 0)
+    };
+    _against = against ? _against + 1U : 0U;
+    _still = (std::abs(duty) >= DUTY_MAX && speed == 0) ? _still + 1U : 0U;
+
+    if (_against >= AGAINST_PERIODS) {
+        return Fault::AGAINST_DUTY;
+    }
+    if (_still >= STILL_PERIODS) {
+        return Fault::STILL_AT_FULL_DUTY;
+    }
+    return Fault::NONE;
+}
+
+void drive::RunawayCheck::reset()
+{
+    _against = 0U;
+    _still = 0U;
+}
+
 int32_t drive::SpeedLoop::update(int32_t target, int32_t measured, float dt_s)
 {
     const auto error {static_cast<float>(target - measured)};

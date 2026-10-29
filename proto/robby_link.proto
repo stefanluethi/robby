@@ -129,11 +129,12 @@ enum LogLevel {
 }
 
 // The log contexts of app_core (robby::LogContextId); blip shows them without the
-// prefix, in lower case: "cmd", "space", "imu".
+// prefix, in lower case: "cmd", "space", "imu", "drive".
 enum Component {
   COMPONENT_CMD = 0;
   COMPONENT_SPACE = 1;
   COMPONENT_IMU = 2;
+  COMPONENT_DRIVE = 3;
 }
 
 message LogRecord {

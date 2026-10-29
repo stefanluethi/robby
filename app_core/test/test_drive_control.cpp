@@ -86,3 +86,47 @@ TEST_CASE("The speed loop saturates without winding up")
     }
     CHECK(loop.update(-100, -100, 0.02F) == -300);
 }
+
+TEST_CASE("A wheel turning against its duty is a runaway after 100 ms")
+{
+    using Fault = RunawayCheck::Fault;
+    RunawayCheck check {};
+
+    // normal driving, also briefly against the duty while braking
+    CHECK(check.update(500, 200) == Fault::NONE);
+    CHECK(check.update(-300, 100) == Fault::NONE);
+    CHECK(check.update(500, 200) == Fault::NONE);
+    // small duty or speed doesn't count
+    for (uint32_t i = 0; i < 10U; ++i) {
+        CHECK(check.update(100, -200) == Fault::NONE);
+        CHECK(check.update(800, -10) == Fault::NONE);
+    }
+
+    // the encoder counts backwards: the loop drives the wheel ever faster
+    for (uint32_t i = 1; i < RunawayCheck::AGAINST_PERIODS; ++i) {
+        CHECK(check.update(600, -150) == Fault::NONE);
+    }
+    CHECK(check.update(1000, -250) == Fault::AGAINST_DUTY);
+
+    check.reset();
+    for (uint32_t i = 1; i < RunawayCheck::AGAINST_PERIODS; ++i) {
+        CHECK(check.update(-600, 150) == Fault::NONE);
+    }
+    CHECK(check.update(-1000, 250) == Fault::AGAINST_DUTY);
+}
+
+TEST_CASE("A wheel standing still at full duty is a runaway after 1 s")
+{
+    using Fault = RunawayCheck::Fault;
+    RunawayCheck check {};
+
+    for (uint32_t i = 1; i < RunawayCheck::STILL_PERIODS; ++i) {
+        CHECK(check.update(-DUTY_MAX, 0) == Fault::NONE);
+    }
+    // one count of movement starts over
+    CHECK(check.update(-DUTY_MAX, -4) == Fault::NONE);
+    for (uint32_t i = 1; i < RunawayCheck::STILL_PERIODS; ++i) {
+        CHECK(check.update(DUTY_MAX, 0) == Fault::NONE);
+    }
+    CHECK(check.update(DUTY_MAX, 0) == Fault::STILL_AT_FULL_DUTY);
+}

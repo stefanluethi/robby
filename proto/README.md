@@ -199,7 +199,7 @@ the fields the unit, the range and the default:
 | blip action | `Invoke.args` | blip args → protobuf |
 |---|---|---|
 | `bench/load` | `BenchLoad` | `rate` → `rate` (required, 0 stops), `batch` → `batch` (optional, 0 = STM32 default 100) |
-| `motor/drive` | `MotorDrive` | `speed` → `speed`, `turn` → `turn` (both required, mm/s): left wheel `speed − turn`, right wheel `speed + turn`, held by the encoders; positive turn turns left; at more than 400 mm/s on a wheel the speed is reduced, the turn kept; both 0 stops the motors (the driver sleeps, the wheels coast) |
+| `motor/drive` | `MotorDrive` | `speed` → `speed`, `turn` → `turn` (both required, mm/s): left wheel `speed − turn`, right wheel `speed + turn`, held by the encoders; positive turn turns left; at more than 400 mm/s on a wheel the speed is reduced, the turn kept; both 0 stops the motors (the driver sleeps, the wheels coast). A wheel that turns against its duty for 100 ms or stands still at full duty for 1 s stops both, with an error in the log (`drive`), until the next `motor/drive` |
 
 Invoking an action from blip:
 

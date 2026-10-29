@@ -9,17 +9,20 @@
 
 #include <robby_link.pb.h>
 #include <rtos/rtos.h>
+#include <se-oss/log/Log.h>
 
 namespace robby {
 
 /// Holds the speed of both wheels with their encoders (MotorDrive), every 20 ms, and sends
 /// a Drive record each period. While speed and turn are both 0 the motor driver sleeps, so
-/// the wheels turn freely. Tracks the position of the robot from the same counts and sends
-/// it as a Pose record each period, also while the wheels coast.
+/// the wheels turn freely. A wheel that runs against its duty or stands still at full duty
+/// stops both (RunawayCheck) until the next MotorDrive. Tracks the position of the robot
+/// from the same counts and sends it as a Pose record each period, also while the wheels
+/// coast.
 class Drive
 {
 public:
-    explicit Drive(Link& link);
+    Drive(se_oss::Logger log, Link& link);
 
     /// From any task. Speed and turn in mm/s, see MotorDrive. Returns why they were
     /// rejected, or nullptr.
@@ -39,17 +42,24 @@ private:
         /// The robot moves forward with DIR low on this motor
         bool reversed;
         TIM_HandleTypeDef* encoder;
+        /// The encoder counts down while the robot moves forward
+        bool encoder_reversed;
+        const char* name;
     };
 
     struct Wheel
     {
         Motor motor;
         drive::SpeedLoop loop {};
+        drive::RunawayCheck runaway {};
+        /// Set in the period before
+        int32_t duty {0};
         uint32_t last_counter {0U};
         /// Since the reset, positive forward
         int32_t counts {0};
     };
 
+    se_oss::Logger _log;
     Link& _link;
     Wheel _left;
     Wheel _right;
@@ -65,6 +75,9 @@ private:
 
     /// Reads the encoder: the counts over the last period, positive forward
     static int32_t measure(Wheel& wheel);
+    /// Whether the wheel ran away, see RunawayCheck; then stops the drive and logs why
+    bool check_runaway(Wheel& wheel, int32_t speed);
+    void stop();
     static void apply(const Motor& motor, int32_t duty);
 };
 

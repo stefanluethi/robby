@@ -8,6 +8,7 @@ enum class LogContextId : uint8_t
     COMMAND,
     SPACE_ACQUISITION,
     IMU_ACQUISITION,
+    DRIVE,
 };
 
 constexpr uint8_t toUint(LogContextId id) { return static_cast<uint8_t>(id); }
@@ -17,6 +18,7 @@ constexpr const char* toString(LogContextId id)
         case LogContextId::COMMAND: return "cmd";
         case LogContextId::SPACE_ACQUISITION: return "space";
         case LogContextId::IMU_ACQUISITION: return "imu";
+        case LogContextId::DRIVE: return "drive";
     }
     return "";
 }

@@ -48,6 +48,7 @@ const char* component_name(robby_link_Component component)
         case robby_link_Component_COMPONENT_CMD: return "COMPONENT_CMD";
         case robby_link_Component_COMPONENT_SPACE: return "COMPONENT_SPACE";
         case robby_link_Component_COMPONENT_IMU: return "COMPONENT_IMU";
+        case robby_link_Component_COMPONENT_DRIVE: return "COMPONENT_DRIVE";
     }
     return "?";
 }
