@@ -87,11 +87,11 @@ def test_batches_are_one_record_per_sample_in_g(schema, name, kind, path):
     assert units(sent) == {f"{path}.x": "g", f"{path}.y": "g", f"{path}.z": "g"}
 
 
-def test_the_distance_image_is_24_rows_of_8_with_null_for_no_target(schema):
+def test_the_distance_image_is_8_rows_of_24_with_null_for_no_target(schema):
     sent, _, content = translate(schema, "uplink_distance")
     image = content["records"][0]["distance"]
     mm = image["mm"]
-    rows = [[mm[r * 8 + x] if mm[r * 8 + x] >= 0 else None for x in range(8)] for r in range(24)]
+    rows = [[mm[y * 24 + c] if mm[y * 24 + c] >= 0 else None for c in range(24)] for y in range(8)]
     assert values(sent) == [("tof/distance", rows, image["t_ns"])]
     assert units(sent) == {"tof/distance": "mm"}
 

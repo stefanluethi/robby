@@ -92,8 +92,7 @@ void DistanceVisualizer::process()
                 if (status == 5U || status == 9U) {
                     distance = _results[sensor_index].distance_mm[cell];
                 }
-                // sent column by column: each run of 8 in the uplink is one zone column x
-                _distance_map.sensors[i][x][y] = distance;
+                _distance_map.sensors[i][y][x] = distance;
             }
         }
     }
