@@ -16,7 +16,7 @@ TOOL_VERSION = 1
 
 
 def add_common_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("url", help="blip WebSocket, e.g. ws://192.168.1.70/ws/robby")
+    parser.add_argument("url", help="blip WebSocket of the outpost, e.g. ws://127.0.0.1:3000/ws/outpost")
     parser.add_argument(
         "--out",
         type=Path,

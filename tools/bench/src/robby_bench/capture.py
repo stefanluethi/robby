@@ -1,6 +1,6 @@
 """Records the blip stream for N seconds to a `.blip` file and writes its metrics as `.json`.
 
-uv run capture.py ws://192.168.1.70/ws/robby --seconds 120 --out runs/h0-a.blip
+uv run capture.py ws://127.0.0.1:3000/ws/outpost --seconds 120 --out runs/h0-a.blip
 """
 
 from __future__ import annotations

@@ -4,13 +4,15 @@ Measure the trace link of robby (STM32 → UART → ESP32 → WiFi → PC) from 
 same blip WebSocket that blip uses. See `doc/plan/protobuf-tracing.md` §5 for what is measured
 and why, and `.claude/skills/bench-robby/SKILL.md` for the hardware campaign.
 
-The bridge serves **one client at a time**: close blip before running a tool, and wait ~3 s
+The tools connect to the outpost (`tools/outpost`, `uv run outpost.py`), which translates
+the protobuf messages of the bridge for blip; start it first. It serves any number of clients,
+so blip may stay open. The bridge itself serves **one client at a time** (the outpost): wait ~3 s
 between two runs (the tools retry the connect for `--connect-timeout` seconds).
 
 ```bash
 cd tools/bench
-uv run capture.py ws://192.168.1.70/ws/robby --seconds 120 --out runs/h0-a.blip --label "H0-a baseline" --meta rssi=-58
-uv run ramp.py ws://192.168.1.70/ws/robby --out runs/h1-b.blip --rates 1k,2k,5k,10k,20k,40k,80k
+uv run capture.py ws://127.0.0.1:3000/ws/outpost --seconds 120 --out runs/h0-a.blip --label "H0-a baseline" --meta rssi=-58
+uv run ramp.py ws://127.0.0.1:3000/ws/outpost --out runs/h1-b.blip --rates 1k,2k,5k,10k,20k,40k,80k
 uv run report.py runs/*.json --baseline h0-a --write
 uv run decode.py runs/h0-a.blip --messages 10
 ```
@@ -27,7 +29,8 @@ uv run decode.py runs/h0-a.blip --messages 10
 
 ## Metrics (`.json`)
 
-- `ws`: payload bytes/s, frames/s, frame sizes. On today's bridge each WebSocket frame is one
+- `ws`: payload bytes/s, frames/s, frame sizes, of the blip messages from the outpost (the
+  bytes on WiFi are in `bridge/ws_tx_bytes`). On the old bridge each WebSocket frame was one
   UART frame, so these are the UART payload bytes too.
 - `messages`: messages/s, by type, decode errors.
 - `paths`: per trace path its rate, bytes share, kind, and the sample interval
@@ -35,19 +38,20 @@ uv run decode.py runs/h0-a.blip --messages 10
 - `streams`: samples/s and bytes/sample of record traces (`imu/acc` {x, y, z}) and of
   per-axis groups (`imu/acc/x`, `/y`, `/z` count as one `imu/acc` sample), so the sonde
   baseline and the outpost compare per sample.
-- `counters`: first/last/delta/per s of the `link/*` and `outpost/*` traces (record fields
+- `counters`: first/last/delta/per s of the `link/*`, `bridge/*` and `outpost/*` traces (record fields
   flattened as `path.field`); `drops`: sum of the deltas of the drop counters.
 
 ## Counter convention (for the firmware)
 
-What the tools expect from the `link/*` (STM32) and `outpost/*` (ESP32) traces:
+What the tools expect from the `link/*` (STM32), `bridge/*` (ESP32) and `outpost/*` (PC)
+traces:
 
 - **Cumulative** counters, published about once per second. A decrease is read as a restart
   (reboot) and counted from 0.
 - A counter whose last path segment (or record field) matches `drop|gap|lost|overrun|overflow|error`
-  (`--drop-pattern`) is a drop counter, e.g. `outpost/seq_gaps`, `outpost/queue_drops`,
-  `outpost/crc_errors`, `link/drops`. Any increase during a ramp step ends the ramp.
-- Gauges (e.g. `outpost/rssi`, `outpost/queue_high_water`) may sit beside them; only their last
+  (`--drop-pattern`) is a drop counter, e.g. `outpost/seq_gaps`, `bridge/queue_drops`,
+  `bridge/crc_errors`, `link/records_dropped`. Any increase during a ramp step ends the ramp.
+- Gauges (e.g. `bridge/rssi`, `bridge/queue_high_water`) may sit beside them; only their last
   value is used. Avoid the drop words in their names.
 - `report.py` takes the UART bytes from `link/tx_bytes` (`--uart-counter`), else, for a run
   without counters (the baseline), the WebSocket payload.

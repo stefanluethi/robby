@@ -61,9 +61,11 @@ set(ROBBY_LINK_GEN_DIR ${CMAKE_BINARY_DIR}/robby_link)
 add_custom_command(
         OUTPUT ${ROBBY_LINK_GEN_DIR}/robby_link.pb.c ${ROBBY_LINK_GEN_DIR}/robby_link.pb.h
         COMMAND ${CMAKE_COMMAND} -E make_directory ${ROBBY_LINK_GEN_DIR}
+        # the blip annotations generate no code: -x keeps blip/options.pb.h out of the #includes
         COMMAND ${ROBBY_NANOPB_GENERATOR} -q -I ${ROBBY_PROTO_DIR} -D ${ROBBY_LINK_GEN_DIR}
-                ${ROBBY_PROTO_DIR}/robby_link.proto
+                -x blip/options.proto ${ROBBY_PROTO_DIR}/robby_link.proto
         DEPENDS ${ROBBY_PROTO_DIR}/robby_link.proto ${ROBBY_PROTO_DIR}/robby_link.options
+                ${ROBBY_PROTO_DIR}/blip/options.proto
         COMMENT "Generating robby_link.pb.c from robby_link.proto"
         VERBATIM
 )

@@ -1,0 +1,136 @@
+// Annotations that tell the blip outpost what the messages of a protobuf schema are to
+// blip: trace paths, units, scaling, timestamps, log records and actions.
+//
+//   import "blip/options.proto";
+//
+//   message Battery {
+//     option (blip.message) = {path: "battery"};
+//     uint64 t_ns = 1 [(blip.field).role = ROLE_TIMESTAMP];
+//     uint32 voltage_mv = 2 [(blip.field) = {name: "voltage", unit: "V", scale: 0.001}];
+//   }
+//
+// `blip-outpost protobuf` loads the schema at run time (with protoc), so a change of the
+// schema needs no generated code and no change of the outpost. Without annotations every
+// field becomes a trace at the path of its message and field names, see
+// doc/source/usage/outpost.rst for the rules.
+//
+// Generators of target code (nanopb, micropb, ...) ignore the annotations; nanopb needs
+// `-x blip/options.proto` so it does not #include code for this file.
+//
+// Fields are only ever added, never renumbered or reused. The extension numbers are in
+// the range for organisation-internal use.
+
+syntax = "proto3";
+
+package blip;
+
+import "google/protobuf/descriptor.proto";
+
+extend google.protobuf.MessageOptions {
+  MessageOptions message = 51700;
+}
+
+extend google.protobuf.FieldOptions {
+  FieldOptions field = 51700;
+}
+
+extend google.protobuf.EnumValueOptions {
+  EnumValueOptions value = 51700;
+}
+
+// What a message is to blip.
+enum Kind {
+  // Traces: each value field is a trace, or with `record` the fields together
+  KIND_VALUES = 0;
+  // A log record: fields of the roles LEVEL, COMPONENT, MESSAGE and TIMESTAMP
+  KIND_LOG = 1;
+  // The answer of the target to an action: fields of the roles ACTION_ID and ERROR
+  KIND_ACTION_RESULT = 2;
+  // An action for the target, in the downlink message: a field of the role ACTION_ID
+  // and a oneof whose message members are the actions, their fields the parameters
+  KIND_INVOKE = 3;
+}
+
+// What a field is to blip.
+enum Role {
+  // A value of a trace (or a parameter of an action)
+  ROLE_VALUE = 0;
+  // The time of the values of the message and of the messages in it, in ns after
+  // `scale` (e.g. 1000 for µs). Without one, a message has the time of its parent, or the
+  // outpost's estimate of the time of the target.
+  ROLE_TIMESTAMP = 1;
+  // With a timestamp: the repeated value fields are series of samples, sample i at
+  // timestamp + i × period, in ns after `scale`. One blip value per sample.
+  ROLE_PERIOD = 2;
+  // A frame counter: in the uplink message, gaps and restarts are counted
+  // (outpost/seq_gaps, outpost/resets); in the downlink message the outpost sets it, +1
+  // per frame.
+  ROLE_SEQUENCE = 3;
+  // KIND_INVOKE and KIND_ACTION_RESULT: the number that pairs an invocation and its answer
+  ROLE_ACTION_ID = 4;
+  // KIND_ACTION_RESULT: why the action was rejected, empty if it was carried out
+  ROLE_ERROR = 5;
+  // KIND_LOG: the level, 0 trace .. 4 error (larger values count as error); an enum
+  // counts by its number
+  ROLE_LEVEL = 6;
+  // KIND_LOG: the component, a string, or an enum by its blip name
+  ROLE_COMPONENT = 7;
+  // KIND_LOG: the text
+  ROLE_MESSAGE = 8;
+}
+
+message MessageOptions {
+  // The path of the traces of this message, levels separated by "/". `{field}` is
+  // replaced by the value of a field of the message, e.g. "tasks/{name}"; that field is
+  // then no value of its own. Without it, the path of the field that holds the message.
+  optional string path = 1;
+  // The value fields are one record value at `path`, {name: value, ...}, instead of a
+  // trace each. With series (ROLE_PERIOD): one record per sample.
+  bool record = 2;
+  Kind kind = 3;
+}
+
+message FieldOptions {
+  Role role = 1;
+  // The level of the path, or the key in a record, for this field; the field name if not
+  // given. "" adds no level: the field's values are at the path of its message.
+  optional string name = 2;
+  // The whole path of this field's traces instead, like MessageOptions.path
+  optional string path = 3;
+  // Unit shown in blip (the unit after scaling)
+  string unit = 4;
+  // Values are multiplied by it and sent as floats
+  optional double scale = 5;
+  // Values below it are sent as null, e.g. 0 for -1 as "no measurement"
+  optional double null_below = 6;
+  // A repeated field as nested lists of these lengths, outermost first, e.g. [24, 8] for
+  // 24 lists of 8; the product must match the number of elements.
+  repeated uint32 shape = 7;
+  // Not sent to blip
+  bool skip = 8;
+
+  // Actions, on a message member of the oneof of a KIND_INVOKE message. `path` above is
+  // the path of the action, the field name if not given.
+  // Shown in blip
+  string description = 9;
+  // blip asks the user before sending the action
+  bool confirm = 10;
+  // The path of the trace that shows what the action set
+  string readback = 11;
+
+  // Parameters: on a field of the message of an action
+  optional double min = 12;
+  optional double max = 13;
+  // The initial value in blip; a parameter with a default may be left out. Without one
+  // it is required.
+  optional double default = 14;
+  // Step of a float parameter
+  optional double step = 15;
+}
+
+message EnumValueOptions {
+  // How blip shows the value, e.g. as a log component or a trace value. Without it the
+  // name of the value without the prefix of its enum (COMPONENT_CMD of the enum Component
+  // becomes "cmd"), in lower case.
+  optional string name = 1;
+}

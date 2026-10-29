@@ -2,6 +2,7 @@
 
 #include "driver/serial_driver.h"
 #include "trace/downlink_reader.h"
+#include "trace/records.h"
 #include "trace/uplink_writer.h"
 
 #include <atomic>
@@ -38,7 +39,8 @@ public:
     bool receive(uint8_t byte) { return _reader.push(byte); }
     const robby_link_Downlink& downlink() const { return _reader.downlink(); }
 
-    /// Fills the LinkStats record and starts the next interval of tx_write_max_us
+    /// Fills the LinkStats record with the counters and the rates since the previous one,
+    /// and starts the next interval of tx_write_max_us
     void make_stats(uint64_t t_ns, robby_link_Record& record);
 
     /// Whether the CRC unit computes the CRC, checked at start (else a table does)
@@ -58,6 +60,7 @@ private:
     uint32_t _write_cycles {0U};
     uint32_t _write_us {0U};
     uint32_t _write_max_us {0U};
+    records::LinkRates _rates {};
 };
 
 }  // namespace robby

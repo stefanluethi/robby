@@ -7,7 +7,17 @@ pub const MAX_DECODED: usize = 1024;
 /// Largest payload (the protobuf bytes).
 pub const MAX_PAYLOAD: usize = MAX_DECODED - 2;
 /// Largest frame on the wire: COBS adds 1 byte per 254, plus the delimiter.
-pub const MAX_ENCODED: usize = MAX_DECODED + MAX_DECODED.div_ceil(254) + 1;
+pub const MAX_ENCODED: usize = encoded_len(MAX_PAYLOAD);
+/// Largest downlink payload the bridge forwards: an `Invoke` takes < 100 bytes. Kept small
+/// because the UART task runs in an interrupt executor, on the stack of whatever task it
+/// interrupts: a frame of 1 KiB moved there overflowed the stacks of the WiFi tasks.
+pub const MAX_DOWNLINK_PAYLOAD: usize = 128;
+
+/// The longest frame on the wire of a payload of `payload` bytes.
+pub const fn encoded_len(payload: usize) -> usize {
+    let decoded = payload + 2;
+    decoded + decoded.div_ceil(254) + 1
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FrameError {
@@ -122,6 +132,18 @@ impl Deframer {
             }
         }
     }
+}
+
+/// A downlink frame for the UART, with its delimiter.
+pub type DownlinkFrame = heapless::Vec<u8, { encoded_len(MAX_DOWNLINK_PAYLOAD) }>;
+
+/// `payload` as a frame of at most `N` bytes, `None` if it doesn't fit.
+pub fn frame<const N: usize>(payload: &[u8]) -> Option<heapless::Vec<u8, N>> {
+    let mut out = heapless::Vec::<u8, N>::new();
+    out.resize(N, 0).ok()?;
+    let len = encode_frame(payload, &mut out)?;
+    out.truncate(len);
+    Some(out)
 }
 
 /// Encodes `payload` into `out` as a frame: CRC, COBS and the delimiter. Returns the length

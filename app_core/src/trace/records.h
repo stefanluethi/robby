@@ -48,7 +48,24 @@ struct TaskInfo
     uint32_t stack_free_min_bytes;
 };
 
+/// Sends the run time and the stack usage as shares in 0.01 %
 void make_task(uint64_t t_ns, const TaskInfo& task, robby_link_Record& record);
+
+/// The rates of the LinkStats records: the differences of the counters to the previous
+/// record over the time between them, since the reset for the first record.
+class LinkRates
+{
+public:
+    /// Fills the rates of `stats` from its time, counters and baud rate, and from
+    /// `tx_write_us`, the total time spent writing (wrapping at 2^32 like the counters)
+    void fill(robby_link_LinkStats& stats, uint32_t tx_write_us);
+
+private:
+    uint64_t _t_ns {0U};
+    uint32_t _tx_bytes {0U};
+    uint32_t _tx_frames {0U};
+    uint32_t _tx_write_us {0U};
+};
 
 /// `level` and `component` are the numbers of se_oss::LogLevel and robby::LogContextId,
 /// which match robby_link_LogLevel and robby_link_Component. The message is cut to 255

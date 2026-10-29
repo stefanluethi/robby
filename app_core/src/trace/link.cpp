@@ -112,7 +112,7 @@ void Link::make_stats(uint64_t t_ns, robby_link_Record& record)
     stats.tx_frames = tx.tx_frames;
     stats.tx_frames_dropped = tx.tx_frames_dropped;
     stats.records_dropped = tx.records_dropped + _records_dropped.load(std::memory_order_relaxed);
-    stats.tx_write_us = _write_us;
+    const uint32_t write_us {_write_us};
     stats.tx_write_max_us = _write_max_us;
     _write_max_us = 0U;
     _lock.unlock();
@@ -122,4 +122,5 @@ void Link::make_stats(uint64_t t_ns, robby_link_Record& record)
     stats.rx_errors = rx.rx_errors.load(std::memory_order_relaxed);
     stats.rx_seq_gaps = rx.rx_seq_gaps.load(std::memory_order_relaxed);
     stats.baud = _serial.baud();
+    _rates.fill(stats, write_us);
 }

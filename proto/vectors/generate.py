@@ -110,14 +110,16 @@ def load_classes() -> dict[str, type[message.Message]]:
     with tempfile.TemporaryDirectory() as tmp:
         out = Path(tmp) / "robby_link.pb"
         subprocess.run(
-            ["protoc", f"-I{PROTO_DIR}", f"--descriptor_set_out={out}", "robby_link.proto"],
+            # with blip/options.proto and descriptor.proto, which robby_link.proto imports
+            ["protoc", f"-I{PROTO_DIR}", "--include_imports", f"--descriptor_set_out={out}", "robby_link.proto"],
             check=True,
         )
         fds = descriptor_pb2.FileDescriptorSet.FromString(out.read_bytes())
     pool = descriptor_pool.DescriptorPool()
     for file in fds.file:
         pool.Add(file)
-    names = [m.name for m in fds.file[0].message_type]
+    link = next(f for f in fds.file if f.name == "robby_link.proto")
+    names = [m.name for m in link.message_type]
     return {
         name: message_factory.GetMessageClass(pool.FindMessageTypeByName(f"{PACKAGE}.{name}"))
         for name in names
@@ -184,10 +186,11 @@ def vectors(c: dict[str, type[message.Message]]) -> list[tuple[str, str, message
         synthetic.y.append(-i)
         synthetic.z.append(1000 + 10 * i)
 
+    # name, priority, runtime_bp, stack size, stack usage in 0.01 %
     tasks = [
-        ("data_publisher", 24, 1234, 4096, 2900),
-        ("imu", 40, 860, 2048, 1088),
-        ("IDLE", 0, 9655, 512, 236),
+        ("data_publisher", 24, 1234, 4096, 2919),
+        ("imu", 40, 860, 2048, 4687),
+        ("IDLE", 0, 9655, 512, 5390),
     ]
     status = U(seq=1234)
     status.records.add(
@@ -196,18 +199,19 @@ def vectors(c: dict[str, type[message.Message]]) -> list[tuple[str, str, message
             current_ma=-350,
         )
     )
-    for name, priority, runtime_bp, stack_size, stack_free in tasks:
+    for name, priority, runtime_bp, stack_size, stack_usage in tasks:
         status.records.add(
             task=c["TaskStats"](
                 t_ns=3_601_000_000_000, name=name, priority=priority, runtime_bp=runtime_bp,
-                stack_size_bytes=stack_size, stack_free_min_bytes=stack_free,
+                stack_size_bytes=stack_size, stack_usage_bp=stack_usage,
             )
         )
     status.records.add(
         link_stats=c["LinkStats"](
-            t_ns=3_601_000_000_000, tx_bytes=36_012_345, tx_frames=46_210, tx_write_us=1_234_567,
+            t_ns=3_601_000_000_000, tx_bytes=36_012_345, tx_frames=46_210,
             tx_write_max_us=812, tx_frames_dropped=3, records_dropped=0, rx_frames=12,
-            rx_errors=1, rx_seq_gaps=0, baud=1_000_000,
+            rx_errors=1, rx_seq_gaps=0, baud=1_000_000, tx_bytes_per_s=10_012,
+            tx_frames_per_ks=12_833, tx_load_bp=10_012, tx_write_time_bp=37,
         )
     )
 

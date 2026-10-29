@@ -1,12 +1,12 @@
 """Ramps the synthetic load with the `bench/load` action until drops start.
 
-    uv run ramp.py ws://192.168.1.70/ws/robby --out runs/h1-b.blip
+    uv run ramp.py ws://127.0.0.1:3000/ws/outpost --out runs/h1-b.blip
 
 For each rate it invokes `bench/load` {rate: N}, waits `--settle` seconds, then measures for
 `--step-seconds`. It stops after the first step with drops: a drop counter (`link/*`,
-`outpost/*` traces whose name matches the drop pattern) went up, or the delivered rate of the
-load trace was below `--min-ratio` of the requested rate. All steps go to one connection and
-one `.blip` recording; the `.json` holds the metrics of each step and the knee.
+`bridge/*`, `outpost/*` traces whose name matches the drop pattern) went up, or the delivered
+rate of the load trace was below `--min-ratio` of the requested rate. All steps go to one
+connection and one `.blip` recording; the `.json` holds the metrics of each step and the knee.
 """
 
 from __future__ import annotations

@@ -152,6 +152,8 @@ TEST_CASE("Battery, tasks and link stats become the records of the vector")
 
     std::array<robby_link_Record, 3> tasks {};
     std::array<std::string, 3> names {};
+    // the high water marks that give the stack usage of the vector
+    constexpr std::array<uint32_t, 3> stack_free {2900U, 1088U, 236U};
     for (std::size_t i = 0; i < tasks.size(); ++i) {
         const auto& t = records_json[i + 1U]["task"];
         names[i] = t["name"].get<std::string>();
@@ -162,9 +164,10 @@ TEST_CASE("Battery, tasks and link stats become the records of the vector")
             .runtime = t["runtime_bp"].get<uint32_t>() * 7U,
             .total_runtime = 70'000U,
             .stack_size_bytes = t["stack_size_bytes"].get<uint32_t>(),
-            .stack_free_min_bytes = t["stack_free_min_bytes"].get<uint32_t>(),
+            .stack_free_min_bytes = stack_free[i],
         };
         records::make_task(t["t_ns"].get<uint64_t>(), info, tasks[i]);
+        CHECK(tasks[i].kind.task.stack_usage_bp == t["stack_usage_bp"].get<uint32_t>());
     }
 
     // LinkStats is filled by robby::Link on the target, the same fields
@@ -175,7 +178,6 @@ TEST_CASE("Battery, tasks and link stats become the records of the vector")
         .t_ns = s["t_ns"].get<uint64_t>(),
         .tx_bytes = s["tx_bytes"].get<uint32_t>(),
         .tx_frames = s["tx_frames"].get<uint32_t>(),
-        .tx_write_us = s["tx_write_us"].get<uint32_t>(),
         .tx_write_max_us = s["tx_write_max_us"].get<uint32_t>(),
         .tx_frames_dropped = s["tx_frames_dropped"].get<uint32_t>(),
         .records_dropped = s["records_dropped"].get<uint32_t>(),
@@ -183,6 +185,10 @@ TEST_CASE("Battery, tasks and link stats become the records of the vector")
         .rx_errors = s["rx_errors"].get<uint32_t>(),
         .rx_seq_gaps = s["rx_seq_gaps"].get<uint32_t>(),
         .baud = s["baud"].get<uint32_t>(),
+        .tx_bytes_per_s = s["tx_bytes_per_s"].get<uint32_t>(),
+        .tx_frames_per_ks = s["tx_frames_per_ks"].get<uint32_t>(),
+        .tx_load_bp = s["tx_load_bp"].get<uint32_t>(),
+        .tx_write_time_bp = s["tx_write_time_bp"].get<uint32_t>(),
     };
 
     CHECK(
@@ -205,7 +211,69 @@ TEST_CASE("A task without run time has 0 %")
         record
     );
     CHECK(record.kind.task.runtime_bp == 0U);
+    CHECK(record.kind.task.stack_usage_bp == 0U);
     CHECK(std::string {record.kind.task.name} == "IDLE");
+}
+
+TEST_CASE("The stack usage is the used share of the stack")
+{
+    robby_link_Record record {};
+    records::TaskInfo info {.name = "t", .priority = 1U, .runtime = 0U, .total_runtime = 1U,
+                            .stack_size_bytes = 1000U, .stack_free_min_bytes = 250U};
+    records::make_task(1U, info, record);
+    CHECK(record.kind.task.stack_usage_bp == 7500U);
+
+    // a high water mark larger than the stack is taken as an unused stack
+    info.stack_free_min_bytes = 2000U;
+    records::make_task(1U, info, record);
+    CHECK(record.kind.task.stack_usage_bp == 0U);
+}
+
+TEST_CASE("The link rates cover the time since the previous LinkStats")
+{
+    records::LinkRates rates {};
+    robby_link_LinkStats stats {};
+    stats.baud = 1'000'000U;
+
+    SECTION("the first one covers the time since the reset")
+    {
+        stats.t_ns = 2'000'000'000U;
+        stats.tx_bytes = 20'000U;
+        stats.tx_frames = 25U;
+        rates.fill(stats, 100'000U);
+        CHECK(stats.tx_bytes_per_s == 10'000U);
+        CHECK(stats.tx_frames_per_ks == 12'500U);
+        // 10 kB/s of 100 kB/s
+        CHECK(stats.tx_load_bp == 1'000U);
+        // 0.1 s of 2 s
+        CHECK(stats.tx_write_time_bp == 500U);
+    }
+
+    SECTION("later ones the difference to the one before, also when the counters wrap")
+    {
+        stats.t_ns = 1'000'000'000U;
+        stats.tx_bytes = UINT32_MAX - 99U;
+        stats.tx_frames = UINT32_MAX;
+        rates.fill(stats, UINT32_MAX - 499U);
+
+        stats.t_ns = 1'500'000'000U;
+        stats.tx_bytes = 4'900U;
+        stats.tx_frames = 4U;
+        rates.fill(stats, 4'500U);
+        CHECK(stats.tx_bytes_per_s == 10'000U);
+        CHECK(stats.tx_frames_per_ks == 10'000U);
+        CHECK(stats.tx_load_bp == 1'000U);
+        CHECK(stats.tx_write_time_bp == 100U);
+    }
+
+    SECTION("no time passed, no rates")
+    {
+        stats.tx_bytes = 100U;
+        rates.fill(stats, 0U);
+        CHECK(stats.tx_bytes_per_s == 0U);
+        CHECK(stats.tx_frames_per_ks == 0U);
+        CHECK(stats.tx_load_bp == 0U);
+    }
 }
 
 TEST_CASE("Logs and action results become the records of the vector")

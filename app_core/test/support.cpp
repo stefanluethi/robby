@@ -184,7 +184,7 @@ json test::to_json(const robby_link_Record& record)
                   {"priority", t.priority},
                   {"runtime_bp", t.runtime_bp},
                   {"stack_size_bytes", t.stack_size_bytes},
-                  {"stack_free_min_bytes", t.stack_free_min_bytes}}}
+                  {"stack_usage_bp", t.stack_usage_bp}}}
             };
         }
         case robby_link_Record_log_tag: {
@@ -208,14 +208,17 @@ json test::to_json(const robby_link_Record& record)
                  {{"t_ns", s.t_ns},
                   {"tx_bytes", s.tx_bytes},
                   {"tx_frames", s.tx_frames},
-                  {"tx_write_us", s.tx_write_us},
                   {"tx_write_max_us", s.tx_write_max_us},
                   {"tx_frames_dropped", s.tx_frames_dropped},
                   {"records_dropped", s.records_dropped},
                   {"rx_frames", s.rx_frames},
                   {"rx_errors", s.rx_errors},
                   {"rx_seq_gaps", s.rx_seq_gaps},
-                  {"baud", s.baud}}}
+                  {"baud", s.baud},
+                  {"tx_bytes_per_s", s.tx_bytes_per_s},
+                  {"tx_frames_per_ks", s.tx_frames_per_ks},
+                  {"tx_load_bp", s.tx_load_bp},
+                  {"tx_write_time_bp", s.tx_write_time_bp}}}
             };
         }
         default: return json::object();

@@ -12,6 +12,16 @@ static_assert(sizeof(robby_link_DistanceImage::mm) / sizeof(robby_link_DistanceI
 
 constexpr bool is_utf8_continuation(char c) { return (static_cast<uint8_t>(c) & 0xC0U) == 0x80U; }
 
+/// count × scale / dt_ns, at most UINT32_MAX
+uint32_t rate(uint64_t count, uint64_t scale, uint64_t dt_ns)
+{
+    constexpr uint64_t max {UINT32_MAX};
+    if (dt_ns == 0U || (count != 0U && scale > UINT64_MAX / count)) {
+        return dt_ns == 0U ? 0U : static_cast<uint32_t>(max);
+    }
+    return static_cast<uint32_t>(std::min(count * scale / dt_ns, max));
+}
+
 }  // namespace
 
 bool records::ImuBatcher::make(const AccelerationFrame& frame, robby_link_Record& record)
@@ -88,7 +98,34 @@ void records::make_task(uint64_t t_ns, const TaskInfo& task, robby_link_Record& 
     out.runtime_bp =
         task.total_runtime > 0U ? static_cast<uint32_t>(uint64_t {task.runtime} * 10'000U / task.total_runtime) : 0U;
     out.stack_size_bytes = task.stack_size_bytes;
-    out.stack_free_min_bytes = task.stack_free_min_bytes;
+    // the high water mark: the largest share of the stack that was ever used
+    const uint32_t free_bytes {std::min(task.stack_free_min_bytes, task.stack_size_bytes)};
+    out.stack_usage_bp = task.stack_size_bytes > 0U ? static_cast<uint32_t>(
+                                                          uint64_t {task.stack_size_bytes - free_bytes} * 10'000U /
+                                                          task.stack_size_bytes
+                                                      )
+                                                    : 0U;
+}
+
+void records::LinkRates::fill(robby_link_LinkStats& stats, uint32_t tx_write_us)
+{
+    const uint64_t dt_ns {stats.t_ns > _t_ns ? stats.t_ns - _t_ns : 0U};
+    // wrapping differences of the counters
+    const uint32_t bytes {stats.tx_bytes - _tx_bytes};
+    const uint32_t frames {stats.tx_frames - _tx_frames};
+    const uint32_t write_us {tx_write_us - _tx_write_us};
+
+    stats.tx_bytes_per_s = rate(bytes, 1'000'000'000U, dt_ns);
+    stats.tx_frames_per_ks = rate(frames, 1'000'000'000'000U, dt_ns);
+    // 1 µs = 1000 ns, 100 % = 10000
+    stats.tx_write_time_bp = rate(write_us, 10'000'000U, dt_ns);
+    // bytes/s of baud / 10 bytes/s (start and stop bit), 100 % = 10000
+    stats.tx_load_bp = stats.baud > 0U ? rate(stats.tx_bytes_per_s, 100'000U, stats.baud) : 0U;
+
+    _t_ns = stats.t_ns;
+    _tx_bytes = stats.tx_bytes;
+    _tx_frames = stats.tx_frames;
+    _tx_write_us = tx_write_us;
 }
 
 void records::make_log(

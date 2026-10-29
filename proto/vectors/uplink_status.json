@@ -1,8 +1,8 @@
 {
   "description": "the once-per-second records: battery, 3 tasks, link stats",
   "type": "robby.link.Uplink",
-  "payload_bytes": 156,
-  "frame_bytes": 160,
+  "payload_bytes": 163,
+  "frame_bytes": 167,
   "value": {
     "seq": 1234,
     "records": [
@@ -23,7 +23,7 @@
           "priority": 24,
           "runtime_bp": 1234,
           "stack_size_bytes": 4096,
-          "stack_free_min_bytes": 2900
+          "stack_usage_bp": 2919
         }
       },
       {
@@ -33,7 +33,7 @@
           "priority": 40,
           "runtime_bp": 860,
           "stack_size_bytes": 2048,
-          "stack_free_min_bytes": 1088
+          "stack_usage_bp": 4687
         }
       },
       {
@@ -43,7 +43,7 @@
           "priority": 0,
           "runtime_bp": 9655,
           "stack_size_bytes": 512,
-          "stack_free_min_bytes": 236
+          "stack_usage_bp": 5390
         }
       },
       {
@@ -51,14 +51,17 @@
           "t_ns": 3601000000000,
           "tx_bytes": 36012345,
           "tx_frames": 46210,
-          "tx_write_us": 1234567,
           "tx_write_max_us": 812,
           "tx_frames_dropped": 3,
           "records_dropped": 0,
           "rx_frames": 12,
           "rx_errors": 1,
           "rx_seq_gaps": 0,
-          "baud": 1000000
+          "baud": 1000000,
+          "tx_bytes_per_s": 10012,
+          "tx_frames_per_ks": 12833,
+          "tx_load_bp": 10012,
+          "tx_write_time_bp": 37
         }
       }
     ]

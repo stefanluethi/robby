@@ -10,7 +10,8 @@ JSON-ready dict:
 - `streams`: samples per second of the record traces (e.g. `imu/acc` {x, y, z}) and of
   per-axis groups (`imu/acc/x`, `/y`, `/z` counted as one `imu/acc` sample), so both
   firmwares compare by sample
-- `counters`: first/last/delta of the `link/*` and `outpost/*` counter traces (records are
+- `counters`: first/last/delta of the `link/*` (STM32), `bridge/*` (ESP32) and `outpost/*`
+  (PC) counter traces (records are
   flattened as `path.field`), and `drops`, the sum of the deltas of the drop counters
 """
 
@@ -25,7 +26,7 @@ from typing import Any
 
 from robby_bench import blip
 
-COUNTER_PREFIXES = ("link/", "outpost/")
+COUNTER_PREFIXES = ("link/", "bridge/", "outpost/")
 DROP_PATTERN = r"drop|gap|lost|overrun|overflow|error"
 GAP_FACTOR = 3.0
 MAX_LISTED_GAPS = 20

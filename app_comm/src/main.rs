@@ -1,14 +1,16 @@
-//! robby outpost: the ESP32-C6 between the STM32 (protobuf frames on the UART) and blip
-//! (CBOR on a WebSocket), see `proto/README.md` and `outpost-core`.
+//! robby bridge: the ESP32-C6 between the STM32 (protobuf frames on the UART) and the
+//! outpost on the PC (`blip-outpost protobuf`, on a WebSocket), see `proto/README.md`.
+//!
+//! The bridge doesn't decode the protobuf messages, so a change of the schema needs no new
+//! firmware: it checks and unwraps the frames of the STM32 and forwards their payloads, and
+//! wraps the payloads of the outpost into frames for the STM32.
 //!
 //! ```text
 //! UART task (interrupt executor)        WebSocket task (thread executor)
-//! read ─ deframe ─ seq ─► UPLINK ──────► translate ─ batch ─► ws://<ip>/ws/robby
-//! write ◄──────────────── DOWNLINK ◄──── parse Invoke ◄─────── blip
+//! read ─ deframe (COBS, CRC) ─► UPLINK ──► binary frame ─► ws://<ip>/ws/robby
+//! write ◄──── frame ◄─────── DOWNLINK ◄── binary frame ◄── outpost
+//!                                         text frame (JSON counters) once per second ─►
 //! ```
-//!
-//! With the `bench-wifi` feature there's no UART: the outpost generates `bench/synthetic`
-//! samples itself at the rate of the `bench/load` action.
 
 #![no_std]
 #![no_main]
@@ -25,32 +27,19 @@ use embassy_time::{Duration, Instant, Timer};
 use embedded_io_async::Write;
 
 use esp_backtrace as _;
-#[cfg(not(feature = "bench-wifi"))]
-use log::debug;
-use log::{info, warn};
+use log::{debug, info, warn};
 
 use esp_hal::{
     clock::CpuClock,
     gpio::{Level, Output},
-    interrupt::software::SoftwareInterruptControl,
+    interrupt::{software::SoftwareInterruptControl, Priority},
     timer::timg::TimerGroup,
-};
-#[cfg(not(feature = "bench-wifi"))]
-use esp_hal::{
-    interrupt::Priority,
     uart::{Config as UartConfig, Uart, UartRx, UartTx},
     Async,
 };
 
-#[cfg(not(feature = "bench-wifi"))]
-use outpost_core::actions::DownlinkFrame;
-use outpost_core::blip::ActionOutcome;
-use outpost_core::framing::MAX_PAYLOAD;
-use outpost_core::{
-    parse_request, Batcher, Counter, Counters, Out, PushError, Rejected, Report, Translator, UplinkCursor,
-};
-#[cfg(not(feature = "bench-wifi"))]
-use outpost_core::{peek_seq, Deframer, FrameError, SeqEvent, SeqTracker};
+use bridge_core::stats::write_units;
+use bridge_core::{frame, Counter, Counters, Deframer, DownlinkFrame, FrameError, Report, MAX_PAYLOAD};
 
 use static_cell::StaticCell;
 
@@ -59,11 +48,7 @@ esp_bootloader_esp_idf::esp_app_desc!();
 const WIFI_SSID: &str = env!("WIFI_SSID");
 const WIFI_PASSWORD: &str = env!("WIFI_PASSWORD");
 
-/// Largest WebSocket frame to blip: a CBOR sequence of ~60 IMU samples
-const BATCH_LIMIT: usize = 4096;
-/// A batch goes out at the latest this long after its first message
-const FLUSH_AFTER_US: u64 = 20_000;
-/// Largest request from blip (an `Invoke` takes < 100 bytes)
+/// Largest message from the outpost: a downlink payload (an `Invoke` takes < 100 bytes)
 const MAX_REQUEST_LEN: usize = 1024;
 /// Uplink payloads between the UART and the WebSocket: ~0.3 s at full UART load
 const UPLINK_QUEUE_LEN: usize = 32;
@@ -82,13 +67,12 @@ fn init_heap() {
     }
 }
 
-// Everything of the outpost is static, nothing on the heap: the radio needs all of it (a queue
+// Everything of the bridge is static, nothing on the heap: the radio needs all of it (a queue
 // of frames on the heap exhausted it, see f570e27).
 type UplinkPayload = heapless::Vec<u8, MAX_PAYLOAD>;
 /// Checked uplink payloads, from the UART task to the WebSocket task
 static UPLINK: Channel<CriticalSectionRawMutex, UplinkPayload, UPLINK_QUEUE_LEN> = Channel::new();
 /// Downlink frames, from the WebSocket task to the UART task
-#[cfg(not(feature = "bench-wifi"))]
 static DOWNLINK: Channel<CriticalSectionRawMutex, DownlinkFrame, 8> = Channel::new();
 
 static COUNTERS: Counters = Counters::new();
@@ -127,7 +111,6 @@ async fn main(spawner: Spawner) -> ! {
 
     esp_rtos::start_with_idle_hook(timg0.timer0, sw_int.software_interrupt0, idle_hook);
 
-    #[cfg_attr(feature = "bench-wifi", allow(unused_variables))]
     let led_conn = Output::new(peripherals.GPIO15, Level::High, esp_hal::gpio::OutputConfig::default());
     let mut rf_switch_power = Output::new(peripherals.GPIO3, Level::Low, esp_hal::gpio::OutputConfig::default());
     let mut rf_switch_external = Output::new(peripherals.GPIO14, Level::High, esp_hal::gpio::OutputConfig::default());
@@ -140,15 +123,10 @@ async fn main(spawner: Spawner) -> ! {
     // Started after the radio init, which masks interrupts long enough to overflow the UART FIFO.
     // UART runs in a higher priority interrupt executor, so the network stack can't delay it
     // long enough to overflow the HW FIFO
-    #[cfg(not(feature = "bench-wifi"))]
-    {
-        static UART_EXECUTOR: StaticCell<esp_rtos::embassy::InterruptExecutor<1>> = StaticCell::new();
-        let uart_executor = UART_EXECUTOR.init(esp_rtos::embassy::InterruptExecutor::new(sw_int.software_interrupt1));
-        let uart_spawner = uart_executor.start(Priority::Priority2);
-        uart_spawner.spawn(uart_task(peripherals.UART1, peripherals.GPIO17, peripherals.GPIO16, led_conn).unwrap());
-    }
-    #[cfg(feature = "bench-wifi")]
-    info!("bench-wifi: no UART, bench/load sets the rate of the synthetic samples");
+    static UART_EXECUTOR: StaticCell<esp_rtos::embassy::InterruptExecutor<1>> = StaticCell::new();
+    let uart_executor = UART_EXECUTOR.init(esp_rtos::embassy::InterruptExecutor::new(sw_int.software_interrupt1));
+    let uart_spawner = uart_executor.start(Priority::Priority2);
+    uart_spawner.spawn(uart_task(peripherals.UART1, peripherals.GPIO17, peripherals.GPIO16, led_conn).unwrap());
 
     let wifi = interfaces.station;
 
@@ -225,14 +203,8 @@ async fn net_task(mut runner: embassy_net::Runner<'static, esp_radio::wifi::Inte
     runner.run().await
 }
 
-type WsBatcher = Batcher<BATCH_LIMIT>;
-
-/// The state of the outpost that outlives a WebSocket session.
-struct Outpost {
-    translator: Translator,
-    batcher: WsBatcher,
-    #[cfg(feature = "bench-wifi")]
-    synthetic: outpost_core::SyntheticGen,
+/// The state of the bridge that outlives a WebSocket session.
+struct Bridge {
     next_report_us: u64,
     /// IDLE_US and the time at the report before
     idle_prev: (u32, u64),
@@ -241,25 +213,17 @@ struct Outpost {
 #[embassy_executor::task]
 async fn ws_server_task(stack: &'static Stack<'static>) {
     let mut rx_buffer = [0; 2048];
-    // the traces stream at ~55 kB/s, a larger window keeps up with the round trips of WiFi
+    // a larger window keeps up with the round trips of WiFi
     let mut tx_buffer = [0; 16384];
-    let mut outpost = Outpost {
-        translator: Translator::new(),
-        batcher: WsBatcher::new(BATCH_LIMIT, FLUSH_AFTER_US),
-        #[cfg(feature = "bench-wifi")]
-        synthetic: outpost_core::SyntheticGen::new(),
-        next_report_us: 0,
-        idle_prev: (IDLE_US.load(Relaxed), now_us()),
-    };
+    let mut bridge = Bridge { next_report_us: 0, idle_prev: (IDLE_US.load(Relaxed), now_us()) };
 
     loop {
         let mut socket = TcpSocket::new(*stack, &mut rx_buffer, &mut tx_buffer);
         socket.set_timeout(Some(Duration::from_secs(10)));
 
         info!("Listening on TCP:80...");
-        // without a client the frames are still translated, so the outpost keeps track of the
-        // tasks, the link rates and the time of the STM32
-        let accepted = match select(socket.accept(80), drain(&mut outpost.translator)).await {
+        // without a client the uplink frames go nowhere: the outpost wants them current
+        let accepted = match select(socket.accept(80), discard_uplink()).await {
             Either::First(accepted) => accepted,
             Either::Second(never) => match never {},
         };
@@ -271,7 +235,7 @@ async fn ws_server_task(stack: &'static Stack<'static>) {
 
         if accept_websocket(&mut socket).await.is_ok() {
             info!("WebSocket session opened");
-            let _ = session(&mut socket, &mut outpost).await;
+            let _ = session(&mut socket, &mut bridge).await;
             info!("WebSocket session closed");
         }
         socket.close();
@@ -281,21 +245,10 @@ async fn ws_server_task(stack: &'static Stack<'static>) {
     }
 }
 
-/// Translates the uplink frames without a client, the messages go nowhere.
-async fn drain(translator: &mut Translator) -> core::convert::Infallible {
+/// Drops the uplink payloads while no client is connected.
+async fn discard_uplink() -> core::convert::Infallible {
     loop {
-        let payload = UPLINK.receive().await;
-        let mut cursor = UplinkCursor::new(&payload);
-        loop {
-            match cursor.next(translator, now_us()) {
-                Ok(Some(_)) => {}
-                Ok(None) => break,
-                Err(_) => {
-                    COUNTERS.add(Counter::DecodeErrors, 1);
-                    break;
-                }
-            }
-        }
+        UPLINK.receive().await;
     }
 }
 
@@ -345,38 +298,28 @@ async fn accept_websocket(socket: &mut TcpSocket<'_>) -> Result<(), ()> {
     socket.write_all(&response_buf[..len]).await.map_err(|_| ())
 }
 
-/// One client: the hello, then uplink messages, answers to its requests and the counters,
-/// until it closes or the connection fails.
-async fn session(socket: &mut TcpSocket<'_>, outpost: &mut Outpost) -> Result<(), ()> {
-    outpost.translator.on_connect();
-    outpost.batcher.clear();
-    for i in 0..outpost.translator.hello_len() {
-        push(socket, &mut outpost.batcher, &outpost.translator.hello(i)).await?;
-    }
-    send(socket, &mut outpost.batcher).await?;
-    #[cfg(feature = "bench-wifi")]
-    outpost.synthetic.restart(now_us());
-    outpost.next_report_us = now_us() + REPORT_PERIOD_US;
+const OPCODE_TEXT: u8 = 0x1;
+const OPCODE_BINARY: u8 = 0x2;
+const OPCODE_CLOSE: u8 = 0x8;
+const OPCODE_PING: u8 = 0x9;
+const OPCODE_PONG: u8 = 0xA;
 
-    let mut rx_buf = [0_u8; MAX_REQUEST_LEN];
+/// One client: the units of the counters, then the uplink payloads, the downlink payloads of
+/// the client and the counters, until it closes or the connection fails.
+async fn session(socket: &mut TcpSocket<'_>, bridge: &mut Bridge) -> Result<(), ()> {
+    let mut text = heapless::String::<1024>::new();
+    // fits, checked by the tests of bridge-core
+    let _ = write_units(&mut text);
+    send(socket, OPCODE_TEXT, text.as_bytes()).await?;
+    bridge.next_report_us = now_us() + REPORT_PERIOD_US;
+
+    let mut rx_buf = [0_u8; MAX_REQUEST_LEN + 14];
     let mut rx_len = 0;
     loop {
-        let wake = [
-            Some(outpost.next_report_us),
-            outpost.batcher.deadline(),
-            outpost.translator.next_timeout(),
-            #[cfg(feature = "bench-wifi")]
-            outpost.synthetic.next_due_us(),
-        ]
-        .into_iter()
-        .flatten()
-        .min()
-        .unwrap_or(u64::MAX);
-
         match select3(
             socket.read(&mut rx_buf[rx_len..]),
             UPLINK.receive(),
-            Timer::at(Instant::from_micros(wake)),
+            Timer::at(Instant::from_micros(bridge.next_report_us)),
         )
         .await
         {
@@ -388,177 +331,75 @@ async fn session(socket: &mut TcpSocket<'_>, outpost: &mut Outpost) -> Result<()
                     let payload = start + payload.start..start + payload.end;
                     start += end;
                     match opcode {
-                        // binary or text
-                        0x1 | 0x2 => handle_request(socket, outpost, &rx_buf[payload]).await?,
-                        // close
-                        0x8 => return Ok(()),
+                        OPCODE_BINARY => forward_downlink(&rx_buf[payload]),
+                        OPCODE_PING => send(socket, OPCODE_PONG, &rx_buf[payload]).await?,
+                        OPCODE_CLOSE => return Ok(()),
                         _ => {}
                     }
                 }
                 rx_buf.copy_within(start..rx_len, 0);
                 rx_len -= start;
                 if rx_len == rx_buf.len() {
-                    warn!("Request larger than {} bytes, closing", MAX_REQUEST_LEN);
+                    warn!("Message larger than {} bytes, closing", MAX_REQUEST_LEN);
                     // close frame, status 1009: message too big
                     let _ = socket.write_all(&[0x88, 0x02, 0x03, 0xF1]).await;
                     return Err(());
                 }
             }
-            Either3::Second(payload) => {
-                let mut cursor = UplinkCursor::new(&payload);
-                loop {
-                    match cursor.next(&mut outpost.translator, now_us()) {
-                        Ok(Some(out)) => push(socket, &mut outpost.batcher, &out).await?,
-                        Ok(None) => break,
-                        Err(_) => {
-                            COUNTERS.add(Counter::DecodeErrors, 1);
-                            break;
-                        }
-                    }
-                }
-            }
+            Either3::Second(payload) => send(socket, OPCODE_BINARY, &payload).await?,
             Either3::Third(()) => {}
         }
 
-        while let Some(out) = outpost.translator.expired(now_us()) {
-            push(socket, &mut outpost.batcher, &out).await?;
-        }
-        if now_us() >= outpost.next_report_us {
-            report(socket, outpost).await?;
-        }
-        #[cfg(feature = "bench-wifi")]
-        generate(socket, outpost).await?;
-        if outpost.batcher.is_due(now_us()) {
-            send(socket, &mut outpost.batcher).await?;
+        if now_us() >= bridge.next_report_us {
+            report(socket, bridge).await?;
         }
     }
 }
 
-/// Answers a request of blip: passes an `Invoke` on to the STM32 or answers it right away.
-async fn handle_request(socket: &mut TcpSocket<'_>, outpost: &mut Outpost, request: &[u8]) -> Result<(), ()> {
-    let mut reason = heapless::String::<64>::new();
-    let id = match parse_request(request) {
-        Ok(invocation) => {
-            #[cfg(feature = "bench-wifi")]
-            let result = match invocation.action {
-                outpost_core::Action::BenchLoad { rate, .. } => {
-                    info!("bench/load: {} samples/s", rate);
-                    outpost.synthetic.set_rate(rate, now_us());
-                    Ok(())
-                }
-                _ => Err("no STM32 in the bench-wifi firmware"),
-            };
-            #[cfg(not(feature = "bench-wifi"))]
-            let result = if DOWNLINK.is_full() {
-                Err("the UART to the STM32 is busy")
-            } else {
-                outpost.translator.forward(&invocation, now_us()).map(|frame| {
-                    // not full, checked above, and only this task sends
-                    let _ = DOWNLINK.try_send(frame);
-                })
-            };
-            match result {
-                // the STM32 answers
-                #[cfg(not(feature = "bench-wifi"))]
-                Ok(()) => return Ok(()),
-                #[cfg(feature = "bench-wifi")]
-                Ok(()) => {
-                    let out = Out::ActionResult { id: invocation.id, result: ActionOutcome::Ok };
-                    push(socket, &mut outpost.batcher, &out).await?;
-                    return send(socket, &mut outpost.batcher).await;
-                }
-                Err(e) => {
-                    let _ = reason.push_str(e);
-                    invocation.id
-                }
-            }
-        }
-        Err(Rejected::Answer { id, reason: r }) => {
-            reason = r;
-            id
-        }
-        Err(Rejected::Unreadable) => {
-            warn!("Ignoring a request that isn't an Invoke ({} bytes)", request.len());
-            return Ok(());
-        }
+/// Frames a downlink payload of the outpost for the STM32.
+fn forward_downlink(payload: &[u8]) {
+    let Some(frame): Option<DownlinkFrame> = frame(payload) else {
+        warn!("Dropping a downlink message of {} bytes, more than {}", payload.len(), bridge_core::MAX_DOWNLINK_PAYLOAD);
+        return COUNTERS.add(Counter::DownlinkDrops, 1);
     };
-    let out = Out::ActionResult { id, result: ActionOutcome::Err(&reason) };
-    push(socket, &mut outpost.batcher, &out).await?;
-    send(socket, &mut outpost.batcher).await
+    if DOWNLINK.try_send(frame).is_err() {
+        return COUNTERS.add(Counter::DownlinkDrops, 1);
+    }
+    COUNTERS.add(Counter::DownlinkFrames, 1);
 }
 
-/// The outpost's counters as `outpost/*` values.
-async fn report(socket: &mut TcpSocket<'_>, outpost: &mut Outpost) -> Result<(), ()> {
+/// The bridge's counters as JSON in a text frame.
+async fn report(socket: &mut TcpSocket<'_>, bridge: &mut Bridge) -> Result<(), ()> {
     let now = now_us();
     let idle = IDLE_US.load(Relaxed);
-    let (idle_before, at) = outpost.idle_prev;
+    let (idle_before, at) = bridge.idle_prev;
     let cpu_idle = (now > at).then(|| (100.0 * idle.wrapping_sub(idle_before) as f32 / (now - at) as f32).min(100.0));
-    outpost.idle_prev = (idle, now);
+    bridge.idle_prev = (idle, now);
     let rssi = RSSI.load(Relaxed);
-    let report = Report {
-        timestamp: outpost.translator.stm32_time_ns(now),
-        values: COUNTERS.snapshot(),
-        cpu_idle,
-        rssi: (rssi != RSSI_UNKNOWN).then_some(rssi),
-    };
-    for i in 0..Report::LEN {
-        push(socket, &mut outpost.batcher, &report.message(i)).await?;
-    }
+    let report = Report { values: COUNTERS.snapshot(), cpu_idle, rssi: (rssi != RSSI_UNKNOWN).then_some(rssi) };
+    let mut text = heapless::String::<1024>::new();
+    // fits, checked by the tests of bridge-core
+    let _ = report.write_json(&mut text);
+    send(socket, OPCODE_TEXT, text.as_bytes()).await?;
     // the next one a period later, without catching up after a stall
-    let next = outpost.next_report_us + REPORT_PERIOD_US;
-    outpost.next_report_us = if next <= now { now + REPORT_PERIOD_US } else { next };
+    let next = bridge.next_report_us + REPORT_PERIOD_US;
+    bridge.next_report_us = if next <= now { now + REPORT_PERIOD_US } else { next };
     Ok(())
 }
 
-/// `bench-wifi`: the synthetic samples due now, a few at a time so requests are still read.
-#[cfg(feature = "bench-wifi")]
-async fn generate(socket: &mut TcpSocket<'_>, outpost: &mut Outpost) -> Result<(), ()> {
-    // samples that are more than 100 ms behind are skipped and counted
-    let (due, skipped) = outpost.synthetic.due(now_us(), 100_000);
-    COUNTERS.add(Counter::BenchDrops, skipped);
-    for _ in 0..due.min(256) {
-        let out = outpost.synthetic.next_sample();
-        push(socket, &mut outpost.batcher, &out).await?;
-    }
-    Ok(())
-}
-
-/// Adds a message to the batch, sends the batch first if it's full.
-async fn push(socket: &mut TcpSocket<'_>, batcher: &mut WsBatcher, out: &Out<'_>) -> Result<(), ()> {
-    match batcher.push(out, now_us()) {
-        Ok(()) => Ok(()),
-        Err(PushError::Full) => {
-            send(socket, batcher).await?;
-            if batcher.push(out, now_us()).is_err() {
-                warn!("Dropping a message larger than a batch");
-            }
-            Ok(())
-        }
-        Err(PushError::TooLarge) => {
-            warn!("Dropping a message larger than a batch");
-            Ok(())
-        }
-    }
-}
-
-/// Sends the batch as one binary WebSocket frame and counts it.
-async fn send(socket: &mut TcpSocket<'_>, batcher: &mut WsBatcher) -> Result<(), ()> {
-    if batcher.is_empty() {
-        return Ok(());
-    }
-    let frame = batcher.frame();
-    let len = frame.len();
-    let header = [0x82, 126, (len >> 8) as u8, len as u8];
-    let header = if len < 126 { &[0x82, len as u8][..] } else { &header[..] };
+/// Sends one unmasked WebSocket frame of at most 64 KiB, and counts it.
+async fn send(socket: &mut TcpSocket<'_>, opcode: u8, payload: &[u8]) -> Result<(), ()> {
+    let len = payload.len();
+    let long = [0x80 | opcode, 126, (len >> 8) as u8, len as u8];
+    let short = [0x80 | opcode, len as u8];
+    let header = if len < 126 { &short[..] } else { &long[..] };
     let start = Instant::now();
     socket.write_all(header).await.map_err(|_| ())?;
-    socket.write_all(frame).await.map_err(|_| ())?;
+    socket.write_all(payload).await.map_err(|_| ())?;
     // until the bytes are in the TCP buffer: long when WiFi doesn't keep up
     COUNTERS.max(Counter::WsSendMax, start.elapsed().as_micros() as u32);
     COUNTERS.add(Counter::WsTxBytes, len as u32);
     COUNTERS.add(Counter::WsFrames, 1);
-    COUNTERS.add(Counter::WsMessages, batcher.messages());
-    batcher.clear();
     Ok(())
 }
 
@@ -589,7 +430,6 @@ fn ws_frame(buf: &mut [u8]) -> Option<(u8, core::ops::Range<usize>, usize)> {
     Some((opcode, offset..end, end))
 }
 
-#[cfg(not(feature = "bench-wifi"))]
 #[embassy_executor::task]
 async fn uart_task(
     uart: esp_hal::peripherals::UART1<'static>,
@@ -608,14 +448,11 @@ async fn uart_task(
     embassy_futures::join::join(uart_rx_loop(uart_rx, led_conn), uart_tx_loop(uart_tx)).await;
 }
 
-/// Reads the frames of the STM32, checks them and queues their payloads. Only the cheap part
-/// happens here, in the interrupt executor: the translation runs in the WebSocket task.
-#[cfg(not(feature = "bench-wifi"))]
+/// Reads the frames of the STM32, checks them and queues their payloads for the WebSocket.
 async fn uart_rx_loop(mut uart_rx: UartRx<'static, Async>, mut led_conn: Output<'static>) {
     let mut deframer = Deframer::new();
     // the STM32 may be in the middle of a frame
     deframer.resync();
-    let mut seq = SeqTracker::new();
     let mut led_div_counter = 0_u16;
 
     loop {
@@ -625,7 +462,7 @@ async fn uart_rx_loop(mut uart_rx: UartRx<'static, Async>, mut led_conn: Output<
                 COUNTERS.add(Counter::UartRxBytes, n as u32);
                 for &b in &read_buf[..n] {
                     if let Some(frame) = deframer.push(b) {
-                        on_uplink_frame(frame, &mut seq);
+                        on_uplink_frame(frame);
                     }
                 }
             }
@@ -645,21 +482,12 @@ async fn uart_rx_loop(mut uart_rx: UartRx<'static, Async>, mut led_conn: Output<
     }
 }
 
-#[cfg(not(feature = "bench-wifi"))]
-fn on_uplink_frame(frame: Result<&[u8], FrameError>, seq: &mut SeqTracker) {
+fn on_uplink_frame(frame: Result<&[u8], FrameError>) {
     let payload = match frame {
         Ok(payload) => payload,
         Err(FrameError::Crc) => return COUNTERS.add(Counter::CrcErrors, 1),
         Err(FrameError::Cobs | FrameError::TooLong) => return COUNTERS.add(Counter::CobsErrors, 1),
     };
-    let Ok(s) = peek_seq(payload) else {
-        return COUNTERS.add(Counter::DecodeErrors, 1);
-    };
-    match seq.check(s) {
-        SeqEvent::InOrder => {}
-        SeqEvent::Gap(n) => COUNTERS.add(Counter::SeqGaps, n),
-        SeqEvent::Reset => COUNTERS.add(Counter::Stm32Resets, 1),
-    }
     COUNTERS.add(Counter::UartFrames, 1);
     // fits: the deframer returns at most MAX_PAYLOAD bytes
     let Ok(payload) = UplinkPayload::from_slice(payload) else { return };
@@ -670,7 +498,6 @@ fn on_uplink_frame(frame: Result<&[u8], FrameError>, seq: &mut SeqTracker) {
     }
 }
 
-#[cfg(not(feature = "bench-wifi"))]
 async fn uart_tx_loop(mut uart_tx: UartTx<'static, Async>) {
     loop {
         let frame = DOWNLINK.receive().await;

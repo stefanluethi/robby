@@ -1,23 +1,33 @@
-// The link between the STM32 (app_core) and the ESP32 outpost (app_comm).
+// The link between the STM32 (app_core) and blip: the STM32 sends Uplink messages and
+// receives Downlink messages over the UART; the ESP32 bridge (app_comm) only frames them
+// and forwards them on its WebSocket, where `blip-outpost protobuf` translates them.
 //
 // Each UART frame carries one Uplink (STM32 -> ESP32) or one Downlink (ESP32 -> STM32),
-// followed by a CRC-16 and COBS-encoded, see README.md for the frame layout, the blip
-// paths the outpost makes of each record, and the versioning rule:
+// followed by a CRC-16 and COBS-encoded, see README.md for the frame layout and the
+// versioning rule:
 //
 //   Fields and messages are only ever added. A field number is never reused, renumbered
 //   or given another type; a field that goes away is marked `reserved`.
 //
+// The (blip.message) and (blip.field) annotations say what each field becomes in blip:
+// its trace path, unit and scale, see blip/options.proto. The outpost reads them at run
+// time, so a change here needs no change of the bridge or the outpost.
+//
 // Conventions:
-// - Values are raw integer counts in the units named by the field (`_ns`, `_mv`, ...);
-//   the outpost scales them for blip. No floats, no strings on the hot path.
+// - Values are integer counts in the units named by the field (`_ns`, `_mv`, `_bp` for
+//   0.01 %, ...), the annotations scale them for blip. No floats, no strings on the hot
+//   path.
+// - The STM32 sends computed values (rates, percentages), not the raw counts they are
+//   computed from: the outpost only scales.
 // - Times are the STM32 uptime in ns, the time domain of all traces.
 // - Field numbers 1-15 (one byte tags) for everything sent often.
-// - The size limits of repeated and string fields are in robby_link.options (nanopb) and
-//   robby_link.toml (micropb); both must agree.
+// - The size limits of repeated and string fields are in robby_link.options (nanopb).
 
 syntax = "proto3";
 
 package robby.link;
+
+import "blip/options.proto";
 
 // ---------------------------------------------------------------------------------------
 // STM32 -> ESP32
@@ -27,7 +37,7 @@ package robby.link;
 message Uplink {
   // 0 for the first frame after a reset of the STM32, +1 per frame, wraps at 2^32.
   // Gaps show frames lost on the UART, see README.md.
-  uint32 seq = 1;
+  uint32 seq = 1 [(blip.field).role = ROLE_SEQUENCE];
   // In the order they were produced. The encoder adds records until the next one would
   // make the frame larger than 1 KiB; any single record fits into an empty frame.
   repeated Record records = 2;
@@ -50,48 +60,59 @@ message Record {
 // Consecutive samples of the accelerometer (LSM6DSO, +-2 g, 0.061 mg/LSB).
 // Sample i was taken at t_first_ns + i * period_ns.
 message ImuBatch {
-  uint64 t_first_ns = 1;
-  uint32 period_ns = 2;
+  option (blip.message) = {path: "imu/acc", record: true};
+  uint64 t_first_ns = 1 [(blip.field).role = ROLE_TIMESTAMP];
+  uint32 period_ns = 2 [(blip.field).role = ROLE_PERIOD];
   // Raw counts, the same number of samples in each axis (at most 100).
-  repeated sint32 x = 3 [packed = true];
-  repeated sint32 y = 4 [packed = true];
-  repeated sint32 z = 5 [packed = true];
+  repeated sint32 x = 3 [packed = true, (blip.field) = {unit: "g", scale: 0.000061}];
+  repeated sint32 y = 4 [packed = true, (blip.field) = {unit: "g", scale: 0.000061}];
+  repeated sint32 z = 5 [packed = true, (blip.field) = {unit: "g", scale: 0.000061}];
 }
 
 // One measurement of the three VL53L8CX time-of-flight sensors.
 message DistanceImage {
-  uint64 t_ns = 1;
+  uint64 t_ns = 1 [(blip.field).role = ROLE_TIMESTAMP];
   // Distances in mm, -1 where a zone has no valid target. 3 sensors x 8 x 8 zones in the
   // order of app_core's DistanceMap::sensors[s][y][x]: index = (s * 8 + y) * 8 + x, where
   // s = 0 is the left sensor, 1 the middle, 2 the right, and x + 8 * y is the VL53L8CX
-  // zone number.
-  repeated sint32 mm = 2 [packed = true];
+  // zone number. In blip 24 rows of 8, tof/distance[s * 8 + y][x], null for no target.
+  repeated sint32 mm = 2 [
+    packed = true,
+    (blip.field) = {path: "tof/distance", unit: "mm", shape: [24, 8], null_below: 0}
+  ];
 }
 
 // What the fuel gauge (BQ28Z620) reports, about once per second.
 message Battery {
-  uint64 t_ns = 1;
+  option (blip.message) = {path: "battery"};
+  uint64 t_ns = 1 [(blip.field).role = ROLE_TIMESTAMP];
   // Relative state of charge in %
-  uint32 soc_pct = 2;
-  uint32 voltage_mv = 3;
-  uint32 cell1_mv = 4;
-  uint32 cell2_mv = 5;
+  uint32 soc_pct = 2 [(blip.field) = {name: "soc", unit: "%"}];
+  uint32 voltage_mv = 3 [(blip.field) = {name: "voltage", unit: "V", scale: 0.001}];
+  uint32 cell1_mv = 4 [(blip.field) = {name: "cell1", unit: "V", scale: 0.001}];
+  uint32 cell2_mv = 5 [(blip.field) = {name: "cell2", unit: "V", scale: 0.001}];
   // Positive while charging, negative while discharging
-  sint32 current_ma = 6;
+  sint32 current_ma = 6 [(blip.field) = {name: "current", unit: "mA"}];
 }
 
-// One FreeRTOS task, all tasks once per second, one record each.
+// One FreeRTOS task, all tasks once per second, one record each: in blip the record
+// tasks/<name> {priority, runtime, stack_size, stack_usage}.
 message TaskStats {
-  uint64 t_ns = 1;
+  option (blip.message) = {path: "tasks/{name}", record: true};
+  reserved 6;
+  reserved "stack_free_min_bytes";
+
+  uint64 t_ns = 1 [(blip.field).role = ROLE_TIMESTAMP];
   // At most 15 characters (configMAX_TASK_NAME_LEN 16)
   string name = 2;
   uint32 priority = 3;
   // Share of the CPU time since boot in 0.01 % (10000 = 100 %)
-  uint32 runtime_bp = 4;
+  uint32 runtime_bp = 4 [(blip.field) = {name: "runtime", unit: "%", scale: 0.01}];
   // FreeRTOS counts the stack in words: times sizeof(StackType_t)
-  uint32 stack_size_bytes = 5;
-  // The smallest number of stack bytes that were ever unused (high water mark)
-  uint32 stack_free_min_bytes = 6;
+  uint32 stack_size_bytes = 5 [(blip.field) = {name: "stack_size", unit: "B"}];
+  // The largest share of the stack that was ever used (from the high water mark) in
+  // 0.01 %, 0 if the size is unknown
+  uint32 stack_usage_bp = 7 [(blip.field) = {name: "stack_usage", unit: "%", scale: 0.01}];
 }
 
 // The levels of se-oss, which match blip's up to ERROR.
@@ -104,7 +125,8 @@ enum LogLevel {
   LOG_LEVEL_FATAL = 5;
 }
 
-// The log contexts of app_core (robby::LogContextId), the outpost names them for blip.
+// The log contexts of app_core (robby::LogContextId); blip shows them without the
+// prefix, in lower case: "cmd", "space", "imu".
 enum Component {
   COMPONENT_CMD = 0;
   COMPONENT_SPACE = 1;
@@ -112,33 +134,39 @@ enum Component {
 }
 
 message LogRecord {
+  option (blip.message).kind = KIND_LOG;
   // Set by the STM32 also for records without a time of their own (it uses the uptime).
-  uint64 t_ns = 1;
-  LogLevel level = 2;
-  Component component_id = 3;
+  uint64 t_ns = 1 [(blip.field).role = ROLE_TIMESTAMP];
+  // FATAL is an error in blip
+  LogLevel level = 2 [(blip.field).role = ROLE_LEVEL];
+  Component component_id = 3 [(blip.field).role = ROLE_COMPONENT];
   // UTF-8, at most 255 bytes
-  string message = 4;
+  string message = 4 [(blip.field).role = ROLE_MESSAGE];
 }
 
 // The answer to an Invoke.
 message ActionResult {
+  option (blip.message).kind = KIND_ACTION_RESULT;
   // The id of the Invoke
-  uint32 id = 1;
+  uint32 id = 1 [(blip.field).role = ROLE_ACTION_ID];
   // Empty: the action was carried out. Otherwise why it was rejected, at most 63 bytes.
-  string error = 2;
+  string error = 2 [(blip.field).role = ROLE_ERROR];
 }
 
-// Counters of the STM32 side of the link, once per second. All counters count up from 0
-// after a reset and wrap at 2^32: the outpost uses the differences between two records.
+// The STM32 side of the link, once per second, as link/<name>. The counters count up from
+// 0 after a reset and wrap at 2^32 (the bench tooling takes their differences); the rates
+// cover the time since the previous LinkStats (since the reset for the first one).
 message LinkStats {
-  uint64 t_ns = 1;
+  option (blip.message) = {path: "link"};
+  reserved 4;
+  reserved "tx_write_us";
+
+  uint64 t_ns = 1 [(blip.field).role = ROLE_TIMESTAMP];
   // Bytes written to the UART, with COBS overhead and delimiters
-  uint32 tx_bytes = 2;
+  uint32 tx_bytes = 2 [(blip.field).unit = "B"];
   uint32 tx_frames = 3;
-  // Time spent writing frames, including waiting for room in the TX buffer, in us
-  uint32 tx_write_us = 4;
   // Longest single write since the previous LinkStats, in us (not a counter)
-  uint32 tx_write_max_us = 5;
+  uint32 tx_write_max_us = 5 [(blip.field) = {name: "tx_write_max", unit: "µs"}];
   // Frames that were not sent because the TX buffer or queue was full
   uint32 tx_frames_dropped = 6;
   // Records that were not encoded because their queue was full
@@ -149,18 +177,28 @@ message LinkStats {
   uint32 rx_errors = 9;
   // Downlink frames missing by their seq
   uint32 rx_seq_gaps = 10;
-  // Current UART baud rate, for the load: tx bytes/s / (baud / 10)
-  uint32 baud = 11;
+  // Current UART baud rate
+  uint32 baud = 11 [(blip.field).unit = "Bd"];
+  // Bytes written per second
+  uint32 tx_bytes_per_s = 12 [(blip.field) = {name: "tx_rate", unit: "B/s"}];
+  // Frames written per 1000 s
+  uint32 tx_frames_per_ks = 13 [(blip.field) = {name: "tx_frame_rate", unit: "1/s", scale: 0.001}];
+  // Share of the UART capacity used, tx bytes/s / (baud / 10), in 0.01 %
+  uint32 tx_load_bp = 14 [(blip.field) = {name: "tx_load", unit: "%", scale: 0.01}];
+  // Share of the time spent writing frames, including waiting for room in the TX buffer,
+  // in 0.01 %
+  uint32 tx_write_time_bp = 15 [(blip.field) = {name: "tx_write_time", unit: "%", scale: 0.01}];
 }
 
 // Synthetic samples of the load generator. The same fields as ImuBatch, so it can be
-// decoded as one; the outpost sends it to blip like the IMU, so it costs the same on WiFi.
+// decoded as one; blip gets it like the IMU, so it costs the same on WiFi.
 message Synthetic {
-  uint64 t_first_ns = 1;
-  uint32 period_ns = 2;
-  repeated sint32 x = 3 [packed = true];
-  repeated sint32 y = 4 [packed = true];
-  repeated sint32 z = 5 [packed = true];
+  option (blip.message) = {path: "bench/synthetic", record: true};
+  uint64 t_first_ns = 1 [(blip.field).role = ROLE_TIMESTAMP];
+  uint32 period_ns = 2 [(blip.field).role = ROLE_PERIOD];
+  repeated sint32 x = 3 [packed = true, (blip.field) = {unit: "g", scale: 0.000061}];
+  repeated sint32 y = 4 [packed = true, (blip.field) = {unit: "g", scale: 0.000061}];
+  repeated sint32 z = 5 [packed = true, (blip.field) = {unit: "g", scale: 0.000061}];
 }
 
 // ---------------------------------------------------------------------------------------
@@ -170,7 +208,7 @@ message Synthetic {
 // One per frame.
 message Downlink {
   // +1 per frame from the outpost, wraps at 2^32
-  uint32 seq = 1;
+  uint32 seq = 1 [(blip.field).role = ROLE_SEQUENCE];
   oneof kind {
     Invoke invoke = 2;
   }
@@ -179,25 +217,26 @@ message Downlink {
 // An action blip invoked, with typed arguments. The STM32 answers with an ActionResult
 // of the same id, also when it rejects it (e.g. no args: "unknown action").
 message Invoke {
-  // Chosen by blip; the outpost passes it on unchanged
-  uint32 id = 1;
-  // One per action, the blip path of each is in README.md
+  option (blip.message).kind = KIND_INVOKE;
+  // Chosen by the outpost, the ActionResult answers with it
+  uint32 id = 1 [(blip.field).role = ROLE_ACTION_ID];
+  // One per action: the outpost offers each member to blip, its fields as parameters
   oneof args {
-    MotorSpeed motor_speed = 2;
-    BenchLoad bench_load = 3;
+    MotorSpeed motor_speed = 2 [(blip.field) = {path: "motor/speed", description: "Duty cycle of the motor PWM"}];
+    BenchLoad bench_load = 3 [
+      (blip.field) = {path: "bench/load", description: "Synthetic IMU-like samples on top of the normal stream"}
+    ];
   }
 }
 
-// "motor/speed": duty cycle of the motor PWM
 message MotorSpeed {
   // 0..1000 per mille
-  uint32 speed = 1;
+  uint32 speed = 1 [(blip.field) = {unit: "‰", min: 0, max: 1000}];
 }
 
-// "bench/load": Synthetic records on top of the normal stream
 message BenchLoad {
   // Samples per second, 0 stops the load generator
-  uint32 rate = 1;
+  uint32 rate = 1 [(blip.field) = {unit: "samples/s", min: 0, max: 100000}];
   // Samples per Synthetic record, 1..100; 0 for the STM32's default (100)
-  uint32 batch = 2;
+  uint32 batch = 2 [(blip.field) = {unit: "samples", min: 0, max: 100, default: 0}];
 }

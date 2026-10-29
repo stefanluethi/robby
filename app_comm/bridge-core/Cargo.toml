@@ -1,0 +1,12 @@
+[package]
+name = "bridge-core"
+description = "The UART frames of the robby link and the bridge's counters, no_std and host-testable"
+version = "0.1.0"
+authors = ["Stefan Lüthi <stefan.luethi@outlook.com>"]
+edition = "2021"
+
+[dependencies]
+heapless = "0.9"
+
+[dev-dependencies]
+serde_json = "1"

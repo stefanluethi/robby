@@ -15,13 +15,18 @@ for what needs hands (cables, power, moving the robot to another distance from t
 - ESP32-C6 bridge: `/dev/ttyACM0`, flashed with espflash.
 - Bridge WebSocket: `ws://192.168.1.70/ws/robby` (DHCP; if it's not reachable, ask the user for
   the address or check the router; don't open the serial console just to look, see below).
+  Since the bridge only forwards protobuf, the tools connect to the outpost on the PC instead:
+  start it in the background with `cd tools/outpost && uv run outpost.py ws://192.168.1.70/ws/robby`
+  (it serves `ws://127.0.0.1:3000/ws/outpost`). The baseline (sonde) firmware still speaks
+  blip CBOR itself: point the tools at the bridge directly for H0.
 - WiFi credentials: `app_comm/wifi.env` in the main checkout (gitignored, written by the user).
   Source it into the environment of the cargo build only. **Never print, echo, cat or commit
   it**, and don't pass its values on a command line you show.
 
 ## Gotchas
 
-- The bridge serves **one client at a time**. Close blip; run one tool at a time.
+- The bridge serves **one client at a time** (the outpost, or a tool on the baseline). The
+  outpost serves any number of clients.
 - Wait **~3 s** between two WebSocket sessions, otherwise the bridge refuses the connection
   (the tools retry for `--connect-timeout`, 10 s by default).
 - **Opening `/dev/ttyACM0` reboots the bridge** (even with DTR/RTS off): never run
@@ -39,7 +44,7 @@ for what needs hands (cables, power, moving the robot to another distance from t
 | baseline (sonde, pass-through bridge) | git tag `bench/baseline-sonde` (892f3f3), both `app_core` and `app_comm` |
 | baseline, all IMU samples (H0-b) | the tag with `ACCELERATION_DECIMATION {1U}` in `app_core/src/service/data_publisher.h`; local change only, never commit it |
 | protobuf (H1) | the integrated branch/tag of workstream A6 (`git tag -l 'bench/*'`, else ask) |
-| ESP32 WiFi only (H1-w) | the protobuf `app_comm` built with `--features bench-wifi` |
+| ESP32 WiFi only (H1-w) | the protobuf `app_comm` of tag `bench/*` before the bridge rework, built with `--features bench-wifi` (the forwarding bridge has no `bench-wifi`) |
 
 Build each firmware in its own worktree so the user's checkout stays untouched:
 
@@ -65,16 +70,16 @@ cargo build --release [--features bench-wifi]
 espflash flash --chip esp32c6 -p /dev/ttyACM0 target/riscv32imac-unknown-none-elf/release/<bin>
 ```
 
-`<bin>` is `proto-bride` on the baseline, `robby-outpost` after A5's rename (check
-`[[bin]]` in `Cargo.toml`). Keep the env vars inside the build command's shell; don't export them
+`<bin>` is `proto-bride` on the baseline, `robby-outpost` on the translating protobuf bridge,
+`robby-bridge` on the forwarding one (check `[[bin]]` in `Cargo.toml`). Keep the env vars inside the build command's shell; don't export them
 into a shell whose output you print. After flashing, wait ~5 s for the WiFi to come up, then
 check the bridge with a short capture (`--seconds 3`) before the real run.
 
 ## Run matrix
 
 Run from `tools/bench/`; files go to `tools/bench/runs/` (gitignored). Note RSSI, AP distance
-and WiFi channel for every run with `--meta` (RSSI is in the `outpost/rssi` trace on the
-protobuf firmware; for the baseline ask the user or read it from the router).
+and WiFi channel for every run with `--meta` (RSSI is in the `bridge/rssi` trace, `outpost/rssi`
+on the translating protobuf bridge; for the baseline ask the user or read it from the router).
 
 | run | firmware | baud | load | command |
 |---|---|---|---|---|
@@ -85,7 +90,8 @@ protobuf firmware; for the baseline ask the user or read it from the router).
 | H1-c | protobuf | 2 / 3 / 4 M | ramp | `uv run ramp.py $URL --out runs/h1-c-2m.blip ...` once per baud rate (set it in both firmwares as A4/A5 document) |
 | H1-w | `bench-wifi` | – | ramp | `uv run ramp.py $URL --out runs/h1-w-near.blip ...`, once close to the AP and once at the robot's normal distance |
 
-`URL=ws://192.168.1.70/ws/robby`. H0 needs only the baseline and can run before the protobuf
+`URL=ws://127.0.0.1:3000/ws/outpost` (the outpost) for the protobuf runs,
+`ws://192.168.1.70/ws/robby` for the baseline. H0 needs only the baseline and can run before the protobuf
 work is merged. The ramp's default rates are 1k…80k samples/s with 10 s steps; extend with
 `--rates` if a ramp ends without drops (`no drops up to …` in the report).
 
@@ -96,8 +102,8 @@ What to check while running:
 - H0-b: expect gaps or a rate below 806/s: sonde can't carry all samples at 1 Mbaud.
 - Ramps: each step must show `drop_counter_samples` ≥ 1; the knee is the first step with a drop
   counter going up or a delivered rate < 95 %. Read the cause from the counters (plan §5
-  "Reading the result"): `outpost/seq_gaps` or STM32 link load ≈ 100 % → UART; outpost queue
-  drops / long WS send time → WiFi; CPU idle ≈ 0 → outpost translation.
+  "Reading the result"): `outpost/seq_gaps` or STM32 link load ≈ 100 % → UART; `bridge/queue_drops` / long
+  `bridge/ws_send_max` → WiFi; `bridge/cpu_idle` ≈ 0 → ESP32 CPU.
 
 ## Results
 

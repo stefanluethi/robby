@@ -1,0 +1,32 @@
+[project]
+name = "robby-outpost"
+version = "0.1.0"
+description = "Serves blip the traces of robby: blip-outpost protobuf with the schema of proto/"
+authors = [
+    { name = "Stefan Lüthi", email = "stefan.luethi@outlook.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "blip-outpost",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+# the checkout of blip next to this repository; or, once pushed:
+# blip-outpost = { git = "https://github.com/stefanluethi/blip", subdirectory = "outpost" }
+blip-outpost = { path = "../../../blip/outpost", editable = true }
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.17.2",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
