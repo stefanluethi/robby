@@ -1,0 +1,22 @@
+{
+  "description": "an ImuPose record: the position from the IMU alone",
+  "type": "robby.link.Uplink",
+  "payload_bytes": 28,
+  "frame_bytes": 32,
+  "value": {
+    "seq": 6,
+    "records": [
+      {
+        "imu_pose": {
+          "t_ns": 3602040000000,
+          "x_mm": 1190,
+          "y_mm": -402,
+          "heading_cdeg": -17640,
+          "speed_mm_s": -215,
+          "stationary": false,
+          "ready": true
+        }
+      }
+    ]
+  }
+}

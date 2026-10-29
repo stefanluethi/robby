@@ -54,6 +54,7 @@ message Record {
     LinkStats link_stats = 7;
     Drive drive = 8;
     Pose pose = 9;
+    ImuPose imu_pose = 10;
     // Load generator, see BenchLoad.
     Synthetic synthetic = 15;
   }
@@ -226,6 +227,27 @@ message Pose {
   sint32 y_mm = 3 [(blip.field) = {name: "y", unit: "mm"}];
   // Counterclockwise from x, -18000..18000 hundredths of a degree
   sint32 heading_cdeg = 4 [(blip.field) = {name: "heading", unit: "°", scale: 0.01}];
+}
+
+// Where the robot is from the IMU alone (gyro and accelerometer), independent of the wheel
+// encoders, about 35 Hz (with each read of the FIFO). Relative to where it stood at its first rest after the reset of the
+// STM32, as seen from above: x forward, y to the left. The heading comes from the gyro,
+// the position from the forward acceleration integrated twice; at rest the speed is set to
+// 0 and the gyro bias and gravity are learned. Drifts with the time since the last rest.
+// In blip imu_pose/<field>.
+message ImuPose {
+  option (blip.message) = {path: "imu_pose"};
+  uint64 t_ns = 1 [(blip.field).role = ROLE_TIMESTAMP];
+  sint32 x_mm = 2 [(blip.field) = {name: "x", unit: "mm"}];
+  sint32 y_mm = 3 [(blip.field) = {name: "y", unit: "mm"}];
+  // Counterclockwise from x, -18000..18000 hundredths of a degree
+  sint32 heading_cdeg = 4 [(blip.field) = {name: "heading", unit: "°", scale: 0.01}];
+  // Along the heading, negative backwards
+  sint32 speed_mm_s = 5 [(blip.field) = {name: "speed", unit: "mm/s"}];
+  // The IMU sees the robot at rest
+  bool stationary = 6;
+  // Calibrated at a first rest; until then the pose stays 0
+  bool ready = 7;
 }
 
 // Synthetic samples of the load generator. The same fields as ImuBatch, so it can be

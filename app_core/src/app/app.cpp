@@ -66,7 +66,8 @@ void App::launch()
         log_registry->createLogger(LogContextId::IMU_ACQUISITION),
         *acceleration_frames,
         *battery,
-        link->dropped_records()
+        link->dropped_records(),
+        *link
     );
 
     auto data_publisher = std::make_unique<DataPublisher>(
@@ -115,7 +116,7 @@ void App::launch()
 
     auto imu_thread = rtos::Task::build()
         .name("imu")
-        .stackSize(2048)
+        .stackSize(4096)
         .priority(5)
         .spawn([&] {
             imu->start();

@@ -116,6 +116,20 @@ void records::make_pose(uint64_t t_ns, const drive::Pose& pose, robby_link_Recor
     out.heading_cdeg = static_cast<int32_t>(std::lround(pose.heading_rad * (18000.0F / std::numbers::pi_v<float>)));
 }
 
+void records::make_imu_pose(uint64_t t_ns, const inertial::Pose& pose, robby_link_Record& record)
+{
+    record = robby_link_Record_init_zero;
+    record.which_kind = robby_link_Record_imu_pose_tag;
+    auto& out = record.kind.imu_pose;
+    out.t_ns = t_ns;
+    out.x_mm = static_cast<int32_t>(std::lround(pose.x_mm));
+    out.y_mm = static_cast<int32_t>(std::lround(pose.y_mm));
+    out.heading_cdeg = static_cast<int32_t>(std::lround(pose.heading_rad * (18000.0F / std::numbers::pi_v<float>)));
+    out.speed_mm_s = static_cast<int32_t>(std::lround(pose.speed_mm_s));
+    out.stationary = pose.stationary;
+    out.ready = pose.ready;
+}
+
 void records::make_task(uint64_t t_ns, const TaskInfo& task, robby_link_Record& record)
 {
     record = robby_link_Record_init_zero;

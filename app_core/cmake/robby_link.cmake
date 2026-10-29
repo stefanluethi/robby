@@ -107,6 +107,7 @@ add_library(
         ${ROBBY_APP_CORE_DIR}/src/trace/records.cpp
         ${ROBBY_APP_CORE_DIR}/src/service/bench_load.cpp
         ${ROBBY_APP_CORE_DIR}/src/service/drive_control.cpp
+        ${ROBBY_APP_CORE_DIR}/src/service/imu_odometry.cpp
         ${ROBBY_APP_CORE_DIR}/src/service/odometry.cpp
 )
 target_include_directories(robby_link_core PUBLIC ${ROBBY_APP_CORE_DIR}/src)

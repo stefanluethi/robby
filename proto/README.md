@@ -112,6 +112,7 @@ with `record: true`), `unit` and `scale` apply per field, and the field with
 | `LinkStats` | `link/*` | see below | path `link` |
 | `Drive` | `motor/*` | ints: `left_target`, `right_target`, `left_speed`, `right_speed` in mm/s, `left_duty`, `right_duty` in ‰, `left_counts`, `right_counts` | path `motor`, 50 Hz: the speed loop of the wheels (`MotorDrive`); the counts are raw encoder counts since the reset, to calibrate the counts per wheel revolution |
 | `Pose` | `pose/*` | ints: `x`, `y` in mm, `heading` in ° (`heading_cdeg` × 0.01) | path `pose`, 50 Hz: the position from the wheel encoders (dead reckoning) since the reset, x forward, y to the left, heading counterclockwise, −180..180 |
+| `ImuPose` | `imu_pose/*` | ints: `x`, `y` in mm, `heading` in ° (`heading_cdeg` × 0.01), `speed` in mm/s; bools `stationary`, `ready` | path `imu_pose`, about 35 Hz (with each read of the FIFO): the position from the IMU alone (gyro heading, forward acceleration integrated twice), independent of the encoders; since the first rest after the reset, x forward, y to the left; at rest (`stationary`) the speed is 0 and the gyro bias and gravity are learned, before the first rest `ready` is false and the pose stays 0; drifts with the time since the last rest |
 | `Synthetic` | `bench/synthetic` | record `{x, y, z}`, floats, one `Value` per sample | like `ImuBatch`, so the load costs the same on WiFi as the IMU |
 
 The outpost sends the blip messages in the order of the records and samples; it doesn't
@@ -279,6 +280,7 @@ uv run proto/vectors/generate.py --check  # fail if they're out of date
 | `uplink_synthetic` | `Synthetic` of 50 samples | 225 | 229 |
 | `uplink_drive` | `Drive`: the speed loop of both wheels | 37 | 41 |
 | `uplink_pose` | `Pose`: the position from the wheel encoders | 23 | 27 |
+| `uplink_imu_pose` | `ImuPose`: the position from the IMU alone | 28 | 32 |
 | `downlink_motor_drive` | `Invoke` `motor/drive` {speed: 200, turn: -50} | 13 | 17 |
 | `downlink_motor_drive_zero` | `Invoke` `motor/drive` {speed: 0, turn: 0} | 8 | 12 |
 | `downlink_bench_load` | `Invoke` `bench/load` {rate: 20000, batch: 100} | 14 | 18 |
@@ -288,5 +290,6 @@ uv run proto/vectors/generate.py --check  # fail if they're out of date
 batch (z ≈ 1 g takes 3 bytes, x/y 2 bytes each, the batch header and frame ~0.3 bytes per
 sample), at most 9.5 bytes. At 806 Hz that's ~5.9 kB/s, against ~160 bytes per sample
 with sonde. With the distance images (~3.8 kB/s at up to 10 Hz), the status records
-(~0.5 kB/s for 16 tasks), the Drive records (~2 kB/s at 50 Hz) and the Pose records
-(~1 kB/s at 50 Hz) the normal stream is ~13 kB/s, ~13 % of the UART at 1 Mbaud.
+(~0.5 kB/s for 16 tasks), the Drive records (~2 kB/s at 50 Hz), the Pose records
+(~1 kB/s at 50 Hz) and the ImuPose records (~0.9 kB/s at 35 Hz) the normal stream is
+~14 kB/s, ~14 % of the UART at 1 Mbaud.

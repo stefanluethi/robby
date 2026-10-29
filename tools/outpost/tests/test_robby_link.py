@@ -195,6 +195,27 @@ def test_the_pose_record_is_pose_in_mm_and_degrees(schema):
     assert units(sent) == {"pose/x": "mm", "pose/y": "mm", "pose/heading": "°"}
 
 
+def test_the_imu_pose_record_is_imu_pose_with_its_state(schema):
+    sent, _, content = translate(schema, "uplink_imu_pose")
+    p = content["records"][0]["imu_pose"]
+    t = p["t_ns"]
+    got = {path: (value, ts) for path, value, ts in values(sent)}
+    assert got == {
+        "imu_pose/x": (p["x_mm"], t),
+        "imu_pose/y": (p["y_mm"], t),
+        "imu_pose/heading": (pytest.approx(p["heading_cdeg"] / 100), t),
+        "imu_pose/speed": (p["speed_mm_s"], t),
+        "imu_pose/stationary": (False, t),
+        "imu_pose/ready": (True, t),
+    }
+    assert units(sent) == {
+        "imu_pose/x": "mm",
+        "imu_pose/y": "mm",
+        "imu_pose/heading": "°",
+        "imu_pose/speed": "mm/s",
+    }
+
+
 def test_log_records_and_action_results(schema):
     sent, results, content = translate(schema, "uplink_log")
     log = content["records"][0]["log"]

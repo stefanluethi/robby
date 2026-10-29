@@ -375,3 +375,23 @@ TEST_CASE("A heading of pi is 180 degrees")
     CHECK(record.kind.pose.x_mm == -1);
     CHECK(record.kind.pose.y_mm == 1);
 }
+
+TEST_CASE("An IMU pose becomes the ImuPose record of the vector")
+{
+    const auto json = read_json("uplink_imu_pose");
+    const auto& p = json["value"]["records"][0]["imu_pose"];
+
+    const inertial::Pose pose {
+        .x_mm = p["x_mm"].get<float>() + 0.3F,
+        .y_mm = p["y_mm"].get<float>() - 0.4F,
+        .heading_rad = p["heading_cdeg"].get<float>() / 18000.0F * std::numbers::pi_v<float>,
+        .speed_mm_s = p["speed_mm_s"].get<float>() + 0.2F,
+        .stationary = p["stationary"].get<bool>(),
+        .ready = p["ready"].get<bool>(),
+    };
+    robby_link_Record record {};
+    records::make_imu_pose(p["t_ns"].get<uint64_t>(), pose, record);
+
+    CHECK(to_json(record) == json["value"]["records"][0]);
+    CHECK(frame_with(json["value"]["seq"].get<uint32_t>(), record) == read_vector("uplink_imu_pose.frame"));
+}

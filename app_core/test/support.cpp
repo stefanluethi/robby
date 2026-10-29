@@ -244,6 +244,19 @@ json test::to_json(const robby_link_Record& record)
                  {{"t_ns", p.t_ns}, {"x_mm", p.x_mm}, {"y_mm", p.y_mm}, {"heading_cdeg", p.heading_cdeg}}}
             };
         }
+        case robby_link_Record_imu_pose_tag: {
+            const auto& p = kind.imu_pose;
+            return {
+                {"imu_pose",
+                 {{"t_ns", p.t_ns},
+                  {"x_mm", p.x_mm},
+                  {"y_mm", p.y_mm},
+                  {"heading_cdeg", p.heading_cdeg},
+                  {"speed_mm_s", p.speed_mm_s},
+                  {"stationary", p.stationary},
+                  {"ready", p.ready}}}
+            };
+        }
         default: return json::object();
     }
 }

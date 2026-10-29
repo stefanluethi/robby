@@ -11,7 +11,7 @@ use bridge_core::{
 };
 use serde_json::Value as Json;
 
-const UPLINKS: [&str; 9] = [
+const UPLINKS: [&str; 10] = [
     "uplink_empty",
     "uplink_imu_full",
     "uplink_imu_worst",
@@ -21,6 +21,7 @@ const UPLINKS: [&str; 9] = [
     "uplink_synthetic",
     "uplink_drive",
     "uplink_pose",
+    "uplink_imu_pose",
 ];
 
 const DOWNLINKS: [&str; 4] =

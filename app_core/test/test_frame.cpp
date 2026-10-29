@@ -19,6 +19,8 @@ const char* const VECTORS[] {
     "uplink_log",
     "uplink_synthetic",
     "uplink_drive",
+    "uplink_pose",
+    "uplink_imu_pose",
     "downlink_motor_drive",
     "downlink_motor_drive_zero",
     "downlink_bench_load",
