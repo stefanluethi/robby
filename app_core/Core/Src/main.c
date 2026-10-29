@@ -191,6 +191,7 @@ int main(void)
     // uint8_t soc = 0U;
     // res = fuelgauge_get_soc(&soc);
     HAL_TIM_PWM_Start(&htim9, TIM_CHANNEL_1);
+    HAL_TIM_PWM_Start(&htim9, TIM_CHANNEL_2);
     CommandHandler_Start_RX_DMA();
     RESIN_launch_app();
 

@@ -32,14 +32,15 @@ std::vector<robby_link_Downlink> feed(DownlinkReader& reader, const Bytes& bytes
     return decoded;
 }
 
-Bytes motor_speed_frame(uint32_t seq, uint32_t id, uint32_t speed)
+Bytes motor_speed_frame(uint32_t seq, uint32_t id, int32_t speed)
 {
     robby_link_Downlink downlink = robby_link_Downlink_init_zero;
     downlink.seq = seq;
     downlink.which_kind = robby_link_Downlink_invoke_tag;
     downlink.kind.invoke.id = id;
     downlink.kind.invoke.which_args = robby_link_Invoke_motor_speed_tag;
-    downlink.kind.invoke.args.motor_speed.speed = speed;
+    downlink.kind.invoke.args.motor_speed.m1 = speed;
+    downlink.kind.invoke.args.motor_speed.m2 = -speed;
     return frame_of(encode_downlink(downlink));
 }
 
@@ -98,9 +99,11 @@ TEST_CASE("Frames split across reads and back to back decode")
     }
 
     REQUIRE(decoded.size() == 4U);
-    CHECK(decoded[0].kind.invoke.args.motor_speed.speed == 500U);
+    CHECK(decoded[0].kind.invoke.args.motor_speed.m1 == 500);
+    CHECK(decoded[0].kind.invoke.args.motor_speed.m2 == -500);
     CHECK(decoded[1].kind.invoke.which_args == robby_link_Invoke_motor_speed_tag);
-    CHECK(decoded[1].kind.invoke.args.motor_speed.speed == 0U);
+    CHECK(decoded[1].kind.invoke.args.motor_speed.m1 == 0);
+    CHECK(decoded[1].kind.invoke.args.motor_speed.m2 == 0);
     CHECK(decoded[2].kind.invoke.args.bench_load.rate == 20'000U);
     CHECK(decoded[3].kind.invoke.which_args == 0U);
     CHECK(reader.counters().rx_seq_gaps == 0U);

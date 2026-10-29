@@ -183,11 +183,17 @@ def test_the_actions_of_the_readme(schema):
     assert actions == [
         {
             "path": "motor/speed",
-            "description": "Duty cycle of the motor PWM",
+            "description": "Duty cycle of the motor PWMs, negative runs backwards",
             "params": [
                 {
-                    "name": "speed",
-                    "kind": {"Int": {"min": 0, "max": 1000}},
+                    "name": "m1",
+                    "kind": {"Int": {"min": -1000, "max": 1000}},
+                    "unit": "‰",
+                    "default": None,
+                },
+                {
+                    "name": "m2",
+                    "kind": {"Int": {"min": -1000, "max": 1000}},
                     "unit": "‰",
                     "default": None,
                 },
@@ -217,8 +223,8 @@ def test_the_actions_of_the_readme(schema):
 @pytest.mark.parametrize(
     ("name", "path", "args"),
     [
-        ("downlink_motor_speed", "motor/speed", {"speed": 500}),
-        ("downlink_motor_speed_zero", "motor/speed", {"speed": 0}),
+        ("downlink_motor_speed", "motor/speed", {"m1": 500, "m2": -500}),
+        ("downlink_motor_speed_zero", "motor/speed", {"m1": 0, "m2": 0}),
         ("downlink_bench_load", "bench/load", {"rate": 20_000, "batch": 100}),
     ],
 )

@@ -184,8 +184,9 @@ the fields the unit, the range and the default:
 
 ```json
 {"Actions": [
-  {"path": "motor/speed", "description": "Duty cycle of the motor PWM",
-   "params": [{"name": "speed", "unit": "‰", "kind": {"Int": {"min": 0, "max": 1000}}}]},
+  {"path": "motor/speed", "description": "Duty cycle of the motor PWMs, negative runs backwards",
+   "params": [{"name": "m1", "unit": "‰", "kind": {"Int": {"min": -1000, "max": 1000}}},
+              {"name": "m2", "unit": "‰", "kind": {"Int": {"min": -1000, "max": 1000}}}]},
   {"path": "bench/load", "description": "Synthetic IMU-like samples on top of the normal stream",
    "params": [{"name": "rate", "unit": "samples/s", "kind": {"Int": {"min": 0, "max": 100000}}},
               {"name": "batch", "unit": "samples", "kind": {"Int": {"min": 0, "max": 100}},
@@ -195,13 +196,13 @@ the fields the unit, the range and the default:
 
 | blip action | `Invoke.args` | blip args → protobuf |
 |---|---|---|
-| `motor/speed` | `MotorSpeed` | `speed` → `speed` (required) |
+| `motor/speed` | `MotorSpeed` | `m1` → `m1`, `m2` → `m2` (both required; positive drives the robot forward, the STM32 reverses motor 2) |
 | `bench/load` | `BenchLoad` | `rate` → `rate` (required, 0 stops), `batch` → `batch` (optional, 0 = STM32 default 100) |
 
 Invoking an action from blip:
 
 1. blip_outpost checks the arguments against the parameters (type, range, required) and
-   rejects invalid ones itself, e.g. `{"Err": "speed: 1001 is above the maximum 1000"}`.
+   rejects invalid ones itself, e.g. `{"Err": "m1: 1001 is above the maximum 1000"}`.
 2. The outpost sends `Downlink {seq, invoke: {id, <args>}}` with an `id` of its own
    (1, 2, ...). The actions are disabled in blip while the bridge isn't connected.
 3. The STM32 checks again, carries the action out and answers with an `ActionResult` of
@@ -209,7 +210,7 @@ Invoking an action from blip:
    outpost answers blip with it, or with `{"Err": "no answer from the target"}` if none
    comes within 1 s.
 
-An `Invoke` with a `MotorSpeed` of speed 0 still carries the (empty) `MotorSpeed`: a set
+An `Invoke` with a `MotorSpeed` of both speeds 0 still carries the (empty) `MotorSpeed`: a set
 oneof member is encoded even when all its fields are defaults
 ([`downlink_motor_speed_zero`](vectors/downlink_motor_speed_zero.json)).
 
@@ -274,8 +275,8 @@ uv run proto/vectors/generate.py --check  # fail if they're out of date
 | `uplink_status` | `Battery`, 3 × `TaskStats`, `LinkStats` | 163 | 167 |
 | `uplink_log` | `LogRecord`, `ActionResult` ok and with an error | 83 | 87 |
 | `uplink_synthetic` | `Synthetic` of 50 samples | 225 | 229 |
-| `downlink_motor_speed` | `Invoke` `motor/speed` {speed: 500} | 11 | 15 |
-| `downlink_motor_speed_zero` | `Invoke` `motor/speed` {speed: 0} | 8 | 12 |
+| `downlink_motor_speed` | `Invoke` `motor/speed` {m1: 500, m2: -500} | 14 | 18 |
+| `downlink_motor_speed_zero` | `Invoke` `motor/speed` {m1: 0, m2: 0} | 8 | 12 |
 | `downlink_bench_load` | `Invoke` `bench/load` {rate: 20000, batch: 100} | 14 | 18 |
 | `downlink_invoke_no_args` | `Invoke` without args | 6 | 10 |
 

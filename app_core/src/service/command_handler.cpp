@@ -1,5 +1,6 @@
 #include "command_handler.h"
 
+#include "main.h"
 #include "stm32f7xx_hal.h"
 #include "trace/records.h"
 
@@ -58,22 +59,34 @@ void CommandHandler::handle(const robby_link_Downlink& downlink)
 const char* CommandHandler::invoke(const robby_link_Invoke& invoke)
 {
     switch (invoke.which_args) {
-        case robby_link_Invoke_motor_speed_tag: return set_motor_speed(invoke.args.motor_speed.speed);
+        case robby_link_Invoke_motor_speed_tag:
+            return set_motor_speed(invoke.args.motor_speed.m1, invoke.args.motor_speed.m2);
         case robby_link_Invoke_bench_load_tag:
             return set_bench_load(invoke.args.bench_load.rate, invoke.args.bench_load.batch);
         default: return "unknown action";
     }
 }
 
-const char* CommandHandler::set_motor_speed(uint32_t speed)
+const char* CommandHandler::set_motor_speed(int32_t m1, int32_t m2)
 {
-    if (speed > MOTOR_SPEED_MAX) {
+    if (m1 < -MOTOR_SPEED_MAX || m1 > MOTOR_SPEED_MAX || m2 < -MOTOR_SPEED_MAX || m2 > MOTOR_SPEED_MAX) {
         return "speed out of range";
     }
 
-    LOG_INFO(_log, "Motor speed: %u", static_cast<unsigned>(speed));
-    __HAL_TIM_SET_COMPARE(&htim9, TIM_CHANNEL_1, speed * 54U);
+    LOG_INFO(_log, "Motor speed: %d, %d", static_cast<int>(m1), static_cast<int>(m2));
+    drive_motor(MOTOR_1, m1);
+    drive_motor(MOTOR_2, m2);
     return nullptr;
+}
+
+void CommandHandler::drive_motor(const Motor& motor, int32_t speed)
+{
+    // DRV8874 in PH/EN mode: the PWM sets the duty cycle, DIR (PH) the direction
+    const bool forward {(speed >= 0) != motor.reversed};
+    HAL_GPIO_WritePin(motor.dir_port, motor.dir_pin, forward ? GPIO_PIN_SET : GPIO_PIN_RESET);
+
+    const auto duty {static_cast<uint32_t>(speed < 0 ? -speed : speed)};
+    __HAL_TIM_SET_COMPARE(&htim9, motor.channel, duty * PWM_COUNTS_PER_PERMILLE);
 }
 
 const char* CommandHandler::set_bench_load(uint32_t rate, uint32_t batch)

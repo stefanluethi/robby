@@ -249,7 +249,8 @@ json test::to_json(const robby_link_Downlink& downlink)
         };
         if (invoke.which_args == robby_link_Invoke_motor_speed_tag) {
             out["motor_speed"] = {
-                {"speed", invoke.args.motor_speed.speed}
+                {"m1", invoke.args.motor_speed.m1},
+                {"m2", invoke.args.motor_speed.m2}
             };
         } else if (invoke.which_args == robby_link_Invoke_bench_load_tag) {
             out["bench_load"] = {

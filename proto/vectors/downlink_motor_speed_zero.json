@@ -1,5 +1,5 @@
 {
-  "description": "Invoke motor/speed {speed: 0}: an empty MotorSpeed that is set",
+  "description": "Invoke motor/speed {m1: 0, m2: 0}: an empty MotorSpeed that is set",
   "type": "robby.link.Downlink",
   "payload_bytes": 8,
   "frame_bytes": 12,
@@ -8,7 +8,8 @@
     "invoke": {
       "id": 2,
       "motor_speed": {
-        "speed": 0
+        "m1": 0,
+        "m2": 0
       }
     }
   }

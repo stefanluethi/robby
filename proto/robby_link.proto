@@ -222,16 +222,26 @@ message Invoke {
   uint32 id = 1 [(blip.field).role = ROLE_ACTION_ID];
   // One per action: the outpost offers each member to blip, its fields as parameters
   oneof args {
-    MotorSpeed motor_speed = 2 [(blip.field) = {path: "motor/speed", description: "Duty cycle of the motor PWM"}];
+    MotorSpeed motor_speed = 2 [
+      (blip.field) = {path: "motor/speed", description: "Duty cycle of the motor PWMs, negative runs backwards"}
+    ];
     BenchLoad bench_load = 3 [
       (blip.field) = {path: "bench/load", description: "Synthetic IMU-like samples on top of the normal stream"}
     ];
   }
 }
 
+// Both motors at once. Positive drives the robot forward: the STM32 reverses the motor
+// that is mounted the other way round.
 message MotorSpeed {
-  // 0..1000 per mille
-  uint32 speed = 1 [(blip.field) = {unit: "‰", min: 0, max: 1000}];
+  // One motor only, 0..1000; replaced by m1 and m2
+  reserved 1;
+  reserved "speed";
+
+  // Motor 1 (TIM9_CH1), -1000..1000 per mille
+  sint32 m1 = 2 [(blip.field) = {unit: "‰", min: -1000, max: 1000}];
+  // Motor 2 (TIM9_CH2), -1000..1000 per mille
+  sint32 m2 = 3 [(blip.field) = {unit: "‰", min: -1000, max: 1000}];
 }
 
 message BenchLoad {
