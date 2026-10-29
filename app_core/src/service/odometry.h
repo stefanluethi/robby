@@ -9,10 +9,10 @@ namespace robby::drive {
 // The position of the robot from the wheel encoders (dead reckoning), without the HAL: the
 // Drive service feeds it the counts of each period.
 
-/// Distance between the middles of the two wheels, where they touch the ground. Not
-/// measured: check it by turning the robot on the spot 10 times (pose/heading has to come
-/// back to where it started); if the heading turns too far, the track is wider.
-inline constexpr int32_t TRACK_WIDTH_UM {120'000};
+/// Distance between the middles of the two wheels, where they touch the ground. To fine
+/// tune it, turn the robot on the spot 10 times: pose/heading has to come back to where it
+/// started; if the heading turns too far, the track is wider.
+inline constexpr int32_t TRACK_WIDTH_UM {145'000};
 
 /// x forward and y to the left of where the robot stood at the reset, as seen from above
 struct Pose
