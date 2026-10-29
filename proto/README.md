@@ -196,7 +196,7 @@ the fields the unit, the range and the default:
 
 | blip action | `Invoke.args` | blip args → protobuf |
 |---|---|---|
-| `motor/speed` | `MotorSpeed` | `m1` → `m1`, `m2` → `m2` (both required; positive drives the robot forward, the STM32 reverses motor 2) |
+| `motor/speed` | `MotorSpeed` | `m1` → `m1`, `m2` → `m2` (both required; positive drives the robot forward, the STM32 reverses motor 1) |
 | `bench/load` | `BenchLoad` | `rate` → `rate` (required, 0 stops), `batch` → `batch` (optional, 0 = STM32 default 100) |
 
 Invoking an action from blip:

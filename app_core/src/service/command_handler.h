@@ -35,13 +35,13 @@ private:
         uint32_t channel;
         GPIO_TypeDef* dir_port;
         uint16_t dir_pin;
-        /// Mounted the other way round: a positive speed runs it backwards, so both
-        /// motors drive the robot forward
+        /// The robot moves forward with DIR low on this motor, so a positive speed sets DIR low
         bool reversed;
     };
 
-    static inline const Motor MOTOR_1 {TIM_CHANNEL_1, MOT_EN_1_GPIO_Port, MOT_EN_1_Pin, false};
-    static inline const Motor MOTOR_2 {TIM_CHANNEL_2, MOT_EN_2_GPIO_Port, MOT_EN_2_Pin, true};
+    // The motors face opposite ways: the robot moves forward with DIR low on motor 1, high on motor 2
+    static inline const Motor MOTOR_1 {TIM_CHANNEL_1, MOT_EN_1_GPIO_Port, MOT_EN_1_Pin, true};
+    static inline const Motor MOTOR_2 {TIM_CHANNEL_2, MOT_EN_2_GPIO_Port, MOT_EN_2_Pin, false};
 
     struct RxChunk
     {
