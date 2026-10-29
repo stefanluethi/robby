@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.22)
 
-# Host unit tests of the trace path: nanopb encoding, framing, the downlink and the bench
-# load, checked against the golden vectors of ../../proto/vectors.
+# Host unit tests of the trace path: nanopb encoding, framing, the downlink, the bench
+# load and the speed loop of the wheels, checked against the golden vectors of ../../proto/vectors.
 #
 #   cmake -S app_core/test -B app_core/build/test && cmake --build app_core/build/test
 #   ctest --test-dir app_core/build/test --output-on-failure
@@ -39,6 +39,7 @@ add_executable(
         test_downlink_reader.cpp
         test_records.cpp
         test_bench_load.cpp
+        test_drive_control.cpp
         support.cpp
 )
 target_compile_options(app_core_tests PRIVATE -Wall -Wextra)

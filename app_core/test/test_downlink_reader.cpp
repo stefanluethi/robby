@@ -14,8 +14,8 @@ using robby::DownlinkReader;
 namespace {
 
 const char* const DOWNLINK_VECTORS[] {
-    "downlink_motor_speed",
-    "downlink_motor_speed_zero",
+    "downlink_motor_drive",
+    "downlink_motor_drive_zero",
     "downlink_bench_load",
     "downlink_invoke_no_args",
 };
@@ -32,15 +32,15 @@ std::vector<robby_link_Downlink> feed(DownlinkReader& reader, const Bytes& bytes
     return decoded;
 }
 
-Bytes motor_speed_frame(uint32_t seq, uint32_t id, int32_t speed)
+Bytes motor_drive_frame(uint32_t seq, uint32_t id, int32_t speed)
 {
     robby_link_Downlink downlink = robby_link_Downlink_init_zero;
     downlink.seq = seq;
     downlink.which_kind = robby_link_Downlink_invoke_tag;
     downlink.kind.invoke.id = id;
-    downlink.kind.invoke.which_args = robby_link_Invoke_motor_speed_tag;
-    downlink.kind.invoke.args.motor_speed.m1 = speed;
-    downlink.kind.invoke.args.motor_speed.m2 = -speed;
+    downlink.kind.invoke.which_args = robby_link_Invoke_motor_drive_tag;
+    downlink.kind.invoke.args.motor_drive.speed = speed;
+    downlink.kind.invoke.args.motor_drive.turn = -speed;
     return frame_of(encode_downlink(downlink));
 }
 
@@ -84,8 +84,8 @@ TEST_CASE("Frames split across reads and back to back decode")
 {
     DownlinkReader reader {&robby::crc16_ccitt_false};
     const Bytes stream {concat({
-        read_vector("downlink_motor_speed.frame"),
-        read_vector("downlink_motor_speed_zero.frame"),
+        read_vector("downlink_motor_drive.frame"),
+        read_vector("downlink_motor_drive_zero.frame"),
         read_vector("downlink_bench_load.frame"),
         read_vector("downlink_invoke_no_args.frame"),
     })};
@@ -99,11 +99,11 @@ TEST_CASE("Frames split across reads and back to back decode")
     }
 
     REQUIRE(decoded.size() == 4U);
-    CHECK(decoded[0].kind.invoke.args.motor_speed.m1 == 500);
-    CHECK(decoded[0].kind.invoke.args.motor_speed.m2 == -500);
-    CHECK(decoded[1].kind.invoke.which_args == robby_link_Invoke_motor_speed_tag);
-    CHECK(decoded[1].kind.invoke.args.motor_speed.m1 == 0);
-    CHECK(decoded[1].kind.invoke.args.motor_speed.m2 == 0);
+    CHECK(decoded[0].kind.invoke.args.motor_drive.speed == 200);
+    CHECK(decoded[0].kind.invoke.args.motor_drive.turn == -50);
+    CHECK(decoded[1].kind.invoke.which_args == robby_link_Invoke_motor_drive_tag);
+    CHECK(decoded[1].kind.invoke.args.motor_drive.speed == 0);
+    CHECK(decoded[1].kind.invoke.args.motor_drive.turn == 0);
     CHECK(decoded[2].kind.invoke.args.bench_load.rate == 20'000U);
     CHECK(decoded[3].kind.invoke.which_args == 0U);
     CHECK(reader.counters().rx_seq_gaps == 0U);
@@ -120,7 +120,7 @@ TEST_CASE("Repeated delimiters are no frames")
 TEST_CASE("A frame with a wrong CRC is counted and skipped")
 {
     DownlinkReader reader {&robby::crc16_ccitt_false};
-    Bytes broken {read_vector("downlink_motor_speed.frame")};
+    Bytes broken {read_vector("downlink_motor_drive.frame")};
     broken[4] ^= 0x01U;
 
     const auto decoded = feed(reader, concat({broken, read_vector("downlink_bench_load.frame")}));
@@ -151,7 +151,7 @@ TEST_CASE("A frame longer than 1 KiB is dropped, the next one decodes")
     Bytes long_frame(1500U, 0x01);
     long_frame.push_back(0x00);
 
-    const auto decoded = feed(reader, concat({long_frame, read_vector("downlink_motor_speed.frame")}));
+    const auto decoded = feed(reader, concat({long_frame, read_vector("downlink_motor_drive.frame")}));
     REQUIRE(decoded.size() == 1U);
     CHECK(reader.counters().rx_errors == 1U);
 }
@@ -161,28 +161,28 @@ TEST_CASE("Gaps in seq are counted, restarts aren't")
     DownlinkReader reader {&robby::crc16_ccitt_false};
 
     // the first frame sets the expectation
-    feed(reader, motor_speed_frame(7, 1, 100));
-    feed(reader, motor_speed_frame(8, 2, 100));
+    feed(reader, motor_drive_frame(7, 1, 100));
+    feed(reader, motor_drive_frame(8, 2, 100));
     CHECK(reader.counters().rx_seq_gaps == 0U);
 
     // 9 and 10 lost
-    feed(reader, motor_speed_frame(11, 3, 100));
+    feed(reader, motor_drive_frame(11, 3, 100));
     CHECK(reader.counters().rx_seq_gaps == 2U);
 
     // the outpost restarted
-    feed(reader, motor_speed_frame(0, 4, 100));
-    feed(reader, motor_speed_frame(1, 5, 100));
+    feed(reader, motor_drive_frame(0, 4, 100));
+    feed(reader, motor_drive_frame(1, 5, 100));
     CHECK(reader.counters().rx_seq_gaps == 2U);
 
     // going back counts as a restart too
-    feed(reader, motor_speed_frame(5, 6, 100));
-    feed(reader, motor_speed_frame(3, 7, 100));
+    feed(reader, motor_drive_frame(5, 6, 100));
+    feed(reader, motor_drive_frame(3, 7, 100));
     CHECK(reader.counters().rx_seq_gaps == 5U);
 
     // wraps at 2^32
-    feed(reader, motor_speed_frame(0xFFFF'FFFFU, 8, 100));
+    feed(reader, motor_drive_frame(0xFFFF'FFFFU, 8, 100));
     const auto gaps = reader.counters().rx_seq_gaps.load();
-    feed(reader, motor_speed_frame(1, 9, 100));
+    feed(reader, motor_drive_frame(1, 9, 100));
     CHECK(reader.counters().rx_seq_gaps == gaps + 1U);
     CHECK(reader.counters().rx_frames == 9U);
 }
@@ -190,10 +190,10 @@ TEST_CASE("Gaps in seq are counted, restarts aren't")
 TEST_CASE("A frame lost to a CRC error shows as a gap")
 {
     DownlinkReader reader {&robby::crc16_ccitt_false};
-    Bytes broken {motor_speed_frame(2, 2, 100)};
+    Bytes broken {motor_drive_frame(2, 2, 100)};
     broken[3] ^= 0x10U;
 
-    feed(reader, concat({motor_speed_frame(1, 1, 100), broken, motor_speed_frame(3, 3, 100)}));
+    feed(reader, concat({motor_drive_frame(1, 1, 100), broken, motor_drive_frame(3, 3, 100)}));
     CHECK(reader.counters().rx_frames == 2U);
     CHECK(reader.counters().rx_errors == 1U);
     CHECK(reader.counters().rx_seq_gaps == 1U);

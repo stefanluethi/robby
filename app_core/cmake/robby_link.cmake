@@ -96,7 +96,7 @@ FetchContent_MakeAvailable(nanocobs)
 add_library(nanocobs STATIC ${nanocobs_SOURCE_DIR}/cobs.c)
 target_include_directories(nanocobs PUBLIC ${nanocobs_SOURCE_DIR})
 
-# The trace path without the HAL and FreeRTOS
+# The trace path and the speed loop of the wheels without the HAL and FreeRTOS
 add_library(
         robby_link_core
         STATIC
@@ -106,6 +106,7 @@ add_library(
         ${ROBBY_APP_CORE_DIR}/src/trace/downlink_reader.cpp
         ${ROBBY_APP_CORE_DIR}/src/trace/records.cpp
         ${ROBBY_APP_CORE_DIR}/src/service/bench_load.cpp
+        ${ROBBY_APP_CORE_DIR}/src/service/drive_control.cpp
 )
 target_include_directories(robby_link_core PUBLIC ${ROBBY_APP_CORE_DIR}/src)
 target_link_libraries(robby_link_core PUBLIC robby_link nanocobs)

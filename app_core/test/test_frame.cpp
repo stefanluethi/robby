@@ -18,8 +18,9 @@ const char* const VECTORS[] {
     "uplink_status",
     "uplink_log",
     "uplink_synthetic",
-    "downlink_motor_speed",
-    "downlink_motor_speed_zero",
+    "uplink_drive",
+    "downlink_motor_drive",
+    "downlink_motor_drive_zero",
     "downlink_bench_load",
     "downlink_invoke_no_args",
 };

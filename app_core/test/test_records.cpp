@@ -327,3 +327,22 @@ TEST_CASE("A level above FATAL is sent as FATAL")
     records::make_log(1U, 0xFFU, 0U, "x", record);
     CHECK(record.kind.log.level == robby_link_LogLevel_LOG_LEVEL_FATAL);
 }
+
+TEST_CASE("A drive sample becomes the Drive record of the vector")
+{
+    const auto json = read_json("uplink_drive");
+    const auto& d = json["value"]["records"][0]["drive"];
+
+    const drive::Sample sample {
+        .t_ns = d["t_ns"].get<uint64_t>(),
+        .target = {.left = d["left_target_mm_s"].get<int32_t>(), .right = d["right_target_mm_s"].get<int32_t>()},
+        .speed = {.left = d["left_speed_mm_s"].get<int32_t>(), .right = d["right_speed_mm_s"].get<int32_t>()},
+        .duty = {.left = d["left_duty"].get<int32_t>(), .right = d["right_duty"].get<int32_t>()},
+        .counts = {.left = d["left_counts"].get<int32_t>(), .right = d["right_counts"].get<int32_t>()},
+    };
+    robby_link_Record record {};
+    records::make_drive(sample, record);
+
+    CHECK(to_json(record) == json["value"]["records"][0]);
+    CHECK(frame_with(json["value"]["seq"].get<uint32_t>(), record) == read_vector("uplink_drive.frame"));
+}

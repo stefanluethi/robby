@@ -52,6 +52,7 @@ message Record {
     LogRecord log = 5;
     ActionResult action_result = 6;
     LinkStats link_stats = 7;
+    Drive drive = 8;
     // Load generator, see BenchLoad.
     Synthetic synthetic = 15;
   }
@@ -191,6 +192,27 @@ message LinkStats {
   uint32 tx_write_time_bp = 15 [(blip.field) = {name: "tx_write_time", unit: "%", scale: 0.01}];
 }
 
+// The speed loop of both wheels, at its rate (50 Hz). Left and right as seen from behind
+// the robot. In blip motor/<field>.
+message Drive {
+  option (blip.message) = {path: "motor"};
+  uint64 t_ns = 1 [(blip.field).role = ROLE_TIMESTAMP];
+  // What the wheel should do, from MotorDrive: speed -/+ turn
+  sint32 left_target_mm_s = 2 [(blip.field) = {name: "left_target", unit: "mm/s"}];
+  sint32 right_target_mm_s = 3 [(blip.field) = {name: "right_target", unit: "mm/s"}];
+  // What the encoder measured over the last period, positive forward
+  sint32 left_speed_mm_s = 4 [(blip.field) = {name: "left_speed", unit: "mm/s"}];
+  sint32 right_speed_mm_s = 5 [(blip.field) = {name: "right_speed", unit: "mm/s"}];
+  // PWM duty cycle set by the loop, -1000..1000 per mille, negative backwards
+  sint32 left_duty = 6 [(blip.field) = {unit: "‰"}];
+  sint32 right_duty = 7 [(blip.field) = {unit: "‰"}];
+  // Encoder counts since the reset, positive forward, wrapping at 2^31. The raw counts,
+  // unlike the other fields, to calibrate the counts per wheel revolution: turn a
+  // wheel once by hand while the motors are stopped.
+  sint32 left_counts = 8;
+  sint32 right_counts = 9;
+}
+
 // Synthetic samples of the load generator. The same fields as ImuBatch, so it can be
 // decoded as one; blip gets it like the IMU, so it costs the same on WiFi.
 message Synthetic {
@@ -221,28 +243,30 @@ message Invoke {
   option (blip.message).kind = KIND_INVOKE;
   // Chosen by the outpost, the ActionResult answers with it
   uint32 id = 1 [(blip.field).role = ROLE_ACTION_ID];
+  // MotorSpeed, the duty cycle of each motor; replaced by MotorDrive
+  reserved 2;
+  reserved "motor_speed";
+
   // One per action: the outpost offers each member to blip, its fields as parameters
   oneof args {
-    MotorSpeed motor_speed = 2 [
-      (blip.field) = {path: "motor/speed", description: "Duty cycle of the motor PWMs, negative runs backwards"}
-    ];
     BenchLoad bench_load = 3 [
       (blip.field) = {path: "bench/load", description: "Synthetic IMU-like samples on top of the normal stream"}
+    ];
+    MotorDrive motor_drive = 4 [
+      (blip.field) = {path: "motor/drive", description: "Speed and turn of the robot, held by the wheel encoders"}
     ];
   }
 }
 
-// Both motors at once. Positive drives the robot forward: the STM32 reverses the motor
-// that is mounted the other way round.
-message MotorSpeed {
-  // One motor only, 0..1000; replaced by m1 and m2
-  reserved 1;
-  reserved "speed";
-
-  // Motor 1 (TIM9_CH1), -1000..1000 per mille
-  sint32 m1 = 2 [(blip.field) = {unit: "‰", min: -1000, max: 1000}];
-  // Motor 2 (TIM9_CH2), -1000..1000 per mille
-  sint32 m2 = 3 [(blip.field) = {unit: "‰", min: -1000, max: 1000}];
+// How the robot drives: the STM32 holds the speed of each wheel with its encoder, the left
+// one at speed - turn, the right one at speed + turn. When a wheel would go faster than
+// 400 mm/s, the speed is reduced and the turn kept. Both 0 stops the motors, they coast.
+message MotorDrive {
+  // Forward speed, negative backwards, in mm/s
+  sint32 speed = 1 [(blip.field) = {unit: "mm/s", min: -400, max: 400}];
+  // Half the difference of the wheel speeds in mm/s, positive turns left
+  // (counterclockwise seen from above). With speed 0 the robot turns on the spot.
+  sint32 turn = 2 [(blip.field) = {unit: "mm/s", min: -400, max: 400}];
 }
 
 message BenchLoad {

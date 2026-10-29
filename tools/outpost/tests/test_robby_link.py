@@ -160,6 +160,28 @@ def test_the_status_records_are_scaled_with_their_units(schema):
     }
 
 
+def test_the_drive_record_is_motor_in_mm_s(schema):
+    sent, _, content = translate(schema, "uplink_drive")
+    d = content["records"][0]["drive"]
+    t = d["t_ns"]
+    got = {path: (value, ts) for path, value, ts in values(sent)}
+    assert got == {
+        "motor/left_target": (d["left_target_mm_s"], t),
+        "motor/right_target": (d["right_target_mm_s"], t),
+        "motor/left_speed": (d["left_speed_mm_s"], t),
+        "motor/right_speed": (d["right_speed_mm_s"], t),
+        "motor/left_duty": (d["left_duty"], t),
+        "motor/right_duty": (d["right_duty"], t),
+        "motor/left_counts": (d["left_counts"], t),
+        "motor/right_counts": (d["right_counts"], t),
+    }
+    assert units(sent) == {
+        **{f"motor/{w}_{f}": "mm/s" for w in ["left", "right"] for f in ["target", "speed"]},
+        "motor/left_duty": "‰",
+        "motor/right_duty": "‰",
+    }
+
+
 def test_log_records_and_action_results(schema):
     sent, results, content = translate(schema, "uplink_log")
     log = content["records"][0]["log"]
@@ -182,24 +204,6 @@ def test_the_actions_of_the_readme(schema):
     ]
     assert actions == [
         {
-            "path": "motor/speed",
-            "description": "Duty cycle of the motor PWMs, negative runs backwards",
-            "params": [
-                {
-                    "name": "m1",
-                    "kind": {"Int": {"min": -1000, "max": 1000}},
-                    "unit": "‰",
-                    "default": None,
-                },
-                {
-                    "name": "m2",
-                    "kind": {"Int": {"min": -1000, "max": 1000}},
-                    "unit": "‰",
-                    "default": None,
-                },
-            ],
-        },
-        {
             "path": "bench/load",
             "description": "Synthetic IMU-like samples on top of the normal stream",
             "params": [
@@ -216,6 +220,23 @@ def test_the_actions_of_the_readme(schema):
                     "default": 0,
                 },
             ],
+        },        {
+            "path": "motor/drive",
+            "description": "Speed and turn of the robot, held by the wheel encoders",
+            "params": [
+                {
+                    "name": "speed",
+                    "kind": {"Int": {"min": -400, "max": 400}},
+                    "unit": "mm/s",
+                    "default": None,
+                },
+                {
+                    "name": "turn",
+                    "kind": {"Int": {"min": -400, "max": 400}},
+                    "unit": "mm/s",
+                    "default": None,
+                },
+            ],
         },
     ]
 
@@ -223,8 +244,8 @@ def test_the_actions_of_the_readme(schema):
 @pytest.mark.parametrize(
     ("name", "path", "args"),
     [
-        ("downlink_motor_speed", "motor/speed", {"m1": 500, "m2": -500}),
-        ("downlink_motor_speed_zero", "motor/speed", {"m1": 0, "m2": 0}),
+        ("downlink_motor_drive", "motor/drive", {"speed": 200, "turn": -50}),
+        ("downlink_motor_drive_zero", "motor/drive", {"speed": 0, "turn": 0}),
         ("downlink_bench_load", "bench/load", {"rate": 20_000, "batch": 100}),
     ],
 )

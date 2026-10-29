@@ -110,6 +110,7 @@ with `record: true`), `unit` and `scale` apply per field, and the field with
 | `LogRecord` | – | `Log {timestamp, level, component, message}` | `KIND_LOG`; `level` above ERROR (FATAL) is an error; `component`: the `Component` name without its prefix, lower case (`COMPONENT_IMU` → `imu`) |
 | `ActionResult` | – | `ActionResult {id, result}` | `KIND_ACTION_RESULT`: answers the invocation of that `id`, `error` empty → `{"Ok": null}`, else `{"Err": error}` |
 | `LinkStats` | `link/*` | see below | path `link` |
+| `Drive` | `motor/*` | ints: `left_target`, `right_target`, `left_speed`, `right_speed` in mm/s, `left_duty`, `right_duty` in ‰, `left_counts`, `right_counts` | path `motor`, 50 Hz: the speed loop of the wheels (`MotorDrive`); the counts are raw encoder counts since the reset, to calibrate the counts per wheel revolution |
 | `Synthetic` | `bench/synthetic` | record `{x, y, z}`, floats, one `Value` per sample | like `ImuBatch`, so the load costs the same on WiFi as the IMU |
 
 The outpost sends the blip messages in the order of the records and samples; it doesn't
@@ -184,20 +185,20 @@ the fields the unit, the range and the default:
 
 ```json
 {"Actions": [
-  {"path": "motor/speed", "description": "Duty cycle of the motor PWMs, negative runs backwards",
-   "params": [{"name": "m1", "unit": "‰", "kind": {"Int": {"min": -1000, "max": 1000}}},
-              {"name": "m2", "unit": "‰", "kind": {"Int": {"min": -1000, "max": 1000}}}]},
   {"path": "bench/load", "description": "Synthetic IMU-like samples on top of the normal stream",
    "params": [{"name": "rate", "unit": "samples/s", "kind": {"Int": {"min": 0, "max": 100000}}},
               {"name": "batch", "unit": "samples", "kind": {"Int": {"min": 0, "max": 100}},
-               "default": 0}]}
+               "default": 0}]},
+  {"path": "motor/drive", "description": "Speed and turn of the robot, held by the wheel encoders",
+   "params": [{"name": "speed", "unit": "mm/s", "kind": {"Int": {"min": -400, "max": 400}}},
+              {"name": "turn", "unit": "mm/s", "kind": {"Int": {"min": -400, "max": 400}}}]}
 ]}
 ```
 
 | blip action | `Invoke.args` | blip args → protobuf |
 |---|---|---|
-| `motor/speed` | `MotorSpeed` | `m1` → `m1`, `m2` → `m2` (both required; positive drives the robot forward, the STM32 reverses motor 1) |
 | `bench/load` | `BenchLoad` | `rate` → `rate` (required, 0 stops), `batch` → `batch` (optional, 0 = STM32 default 100) |
+| `motor/drive` | `MotorDrive` | `speed` → `speed`, `turn` → `turn` (both required, mm/s): left wheel `speed − turn`, right wheel `speed + turn`, held by the encoders; positive turn turns left; at more than 400 mm/s on a wheel the speed is reduced, the turn kept; both 0 stops the motors (the driver sleeps, the wheels coast) |
 
 Invoking an action from blip:
 
@@ -210,9 +211,9 @@ Invoking an action from blip:
    outpost answers blip with it, or with `{"Err": "no answer from the target"}` if none
    comes within 1 s.
 
-An `Invoke` with a `MotorSpeed` of both speeds 0 still carries the (empty) `MotorSpeed`: a set
-oneof member is encoded even when all its fields are defaults
-([`downlink_motor_speed_zero`](vectors/downlink_motor_speed_zero.json)).
+An `Invoke` with a `MotorDrive` of speed and turn 0 still carries the (empty) `MotorDrive`: a
+set oneof member is encoded even when all its fields are defaults
+([`downlink_motor_drive_zero`](vectors/downlink_motor_drive_zero.json)).
 
 A new action is a message for its arguments and a new member of `Invoke.args` with the
 next free number, annotated with its path and description, and the STM32 code that
@@ -275,13 +276,15 @@ uv run proto/vectors/generate.py --check  # fail if they're out of date
 | `uplink_status` | `Battery`, 3 × `TaskStats`, `LinkStats` | 163 | 167 |
 | `uplink_log` | `LogRecord`, `ActionResult` ok and with an error | 83 | 87 |
 | `uplink_synthetic` | `Synthetic` of 50 samples | 225 | 229 |
-| `downlink_motor_speed` | `Invoke` `motor/speed` {m1: 500, m2: -500} | 14 | 18 |
-| `downlink_motor_speed_zero` | `Invoke` `motor/speed` {m1: 0, m2: 0} | 8 | 12 |
+| `uplink_drive` | `Drive`: the speed loop of both wheels | 37 | 41 |
+| `downlink_motor_drive` | `Invoke` `motor/drive` {speed: 200, turn: -50} | 13 | 17 |
+| `downlink_motor_drive_zero` | `Invoke` `motor/drive` {speed: 0, turn: 0} | 8 | 12 |
 | `downlink_bench_load` | `Invoke` `bench/load` {rate: 20000, batch: 100} | 14 | 18 |
 | `downlink_invoke_no_args` | `Invoke` without args | 6 | 10 |
 
 **Bytes per IMU sample**: 734 / 100 = **7.3 bytes** on the wire for a realistic full
 batch (z ≈ 1 g takes 3 bytes, x/y 2 bytes each, the batch header and frame ~0.3 bytes per
 sample), at most 9.5 bytes. At 806 Hz that's ~5.9 kB/s, against ~160 bytes per sample
-with sonde. With the distance images (~3.8 kB/s at up to 10 Hz) and the status records
-(~0.5 kB/s for 16 tasks) the normal stream is ~10 kB/s, ~10 % of the UART at 1 Mbaud.
+with sonde. With the distance images (~3.8 kB/s at up to 10 Hz), the status records
+(~0.5 kB/s for 16 tasks) and the Drive records (~2 kB/s at 50 Hz) the normal stream is
+~12 kB/s, ~12 % of the UART at 1 Mbaud.

@@ -44,6 +44,7 @@ add_executable(
         src/service/imu.cpp
         src/service/data_publisher.cpp
         src/service/command_handler.cpp
+        src/service/drive.cpp
         src/util/colormap.cpp
         src/trace/clock.cpp
         src/trace/link.cpp

@@ -87,6 +87,22 @@ void records::make_battery(uint64_t t_ns, const fuelgauge_status_t& battery, rob
     out.current_ma = battery.current;
 }
 
+void records::make_drive(const drive::Sample& sample, robby_link_Record& record)
+{
+    record = robby_link_Record_init_zero;
+    record.which_kind = robby_link_Record_drive_tag;
+    auto& out = record.kind.drive;
+    out.t_ns = sample.t_ns;
+    out.left_target_mm_s = sample.target.left;
+    out.right_target_mm_s = sample.target.right;
+    out.left_speed_mm_s = sample.speed.left;
+    out.right_speed_mm_s = sample.speed.right;
+    out.left_duty = sample.duty.left;
+    out.right_duty = sample.duty.right;
+    out.left_counts = sample.counts.left;
+    out.right_counts = sample.counts.right;
+}
+
 void records::make_task(uint64_t t_ns, const TaskInfo& task, robby_link_Record& record)
 {
     record = robby_link_Record_init_zero;

@@ -221,6 +221,21 @@ json test::to_json(const robby_link_Record& record)
                   {"tx_write_time_bp", s.tx_write_time_bp}}}
             };
         }
+        case robby_link_Record_drive_tag: {
+            const auto& d = kind.drive;
+            return {
+                {"drive",
+                 {{"t_ns", d.t_ns},
+                  {"left_target_mm_s", d.left_target_mm_s},
+                  {"right_target_mm_s", d.right_target_mm_s},
+                  {"left_speed_mm_s", d.left_speed_mm_s},
+                  {"right_speed_mm_s", d.right_speed_mm_s},
+                  {"left_duty", d.left_duty},
+                  {"right_duty", d.right_duty},
+                  {"left_counts", d.left_counts},
+                  {"right_counts", d.right_counts}}}
+            };
+        }
         default: return json::object();
     }
 }
@@ -247,10 +262,10 @@ json test::to_json(const robby_link_Downlink& downlink)
         json out {
             {"id", invoke.id}
         };
-        if (invoke.which_args == robby_link_Invoke_motor_speed_tag) {
-            out["motor_speed"] = {
-                {"m1", invoke.args.motor_speed.m1},
-                {"m2", invoke.args.motor_speed.m2}
+        if (invoke.which_args == robby_link_Invoke_motor_drive_tag) {
+            out["motor_drive"] = {
+                {"speed", invoke.args.motor_drive.speed},
+                {"turn",  invoke.args.motor_drive.turn }
             };
         } else if (invoke.which_args == robby_link_Invoke_bench_load_tag) {
             out["bench_load"] = {

@@ -2,6 +2,7 @@
 
 #include "main.h"
 #include "service/bench_load.h"
+#include "service/drive.h"
 #include "trace/link.h"
 
 #include <array>
@@ -19,30 +20,13 @@ namespace robby {
 class CommandHandler
 {
 public:
-    CommandHandler(se_oss::Logger log, Link& link, BenchLoad& bench_load);
+    CommandHandler(se_oss::Logger log, Link& link, Drive& drive, BenchLoad& bench_load);
     /// Called by the UART interrupt with the received bytes
     void data_received_callback(void* data, std::size_t length);
     void process();
 
 private:
     static constexpr std::size_t MAX_RX_CHUNK_LENGTH {256};
-    static constexpr int32_t MOTOR_SPEED_MAX {1000};
-    /// TIM9 counts to 54000 per PWM period
-    static constexpr uint32_t PWM_COUNTS_PER_PERMILLE {54U};
-
-    struct Motor
-    {
-        uint32_t channel;
-        GPIO_TypeDef* dir_port;
-        uint16_t dir_pin;
-        /// The robot moves forward with DIR low on this motor, so a positive speed sets DIR low
-        bool reversed;
-    };
-
-    // The motors face opposite ways: the robot moves forward with DIR low on motor 1, high on motor 2
-    static inline const Motor MOTOR_1 {TIM_CHANNEL_1, MOT_EN_1_GPIO_Port, MOT_EN_1_Pin, true};
-    static inline const Motor MOTOR_2 {TIM_CHANNEL_2, MOT_EN_2_GPIO_Port, MOT_EN_2_Pin, false};
-
     struct RxChunk
     {
         std::size_t length {};
@@ -57,14 +41,14 @@ private:
 
     se_oss::Logger _log;
     Link& _link;
+    Drive& _drive;
     BenchLoad& _bench_load;
 
     void handle(const robby_link_Downlink& downlink);
     /// Returns why the action was rejected, or nullptr
     const char* invoke(const robby_link_Invoke& invoke);
-    /// Signed per mille, positive drives the robot forward
-    const char* set_motor_speed(int32_t m1, int32_t m2);
-    static void drive_motor(const Motor& motor, int32_t speed);
+    /// mm/s, see MotorDrive
+    const char* set_motor_drive(int32_t speed, int32_t turn);
     const char* set_bench_load(uint32_t rate, uint32_t batch);
 };
 

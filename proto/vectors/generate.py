@@ -226,6 +226,16 @@ def vectors(c: dict[str, type[message.Message]]) -> list[tuple[str, str, message
     log.records.add(action_result=c["ActionResult"](id=1))
     log.records.add(action_result=c["ActionResult"](id=2, error="speed out of range"))
 
+    # driving forward and turning left, the wheels still catching up
+    drive = U(seq=4)
+    drive.records.add(
+        drive=c["Drive"](
+            t_ns=3_602_000_000_000, left_target_mm_s=150, right_target_mm_s=250,
+            left_speed_mm_s=142, right_speed_mm_s=257, left_duty=478, right_duty=731,
+            left_counts=123_456, right_counts=-7,
+        )
+    )
+
     full_imu = U(seq=1)
     full_imu.records.add(imu=imu)
     worst = U(seq=2**32 - 1)
@@ -243,10 +253,11 @@ def vectors(c: dict[str, type[message.Message]]) -> list[tuple[str, str, message
         ("uplink_status", "the once-per-second records: battery, 3 tasks, link stats", status),
         ("uplink_log", "a log record, an ActionResult ok and one with an error", log),
         ("uplink_synthetic", "a Synthetic batch of 50 samples", synth),
-        ("downlink_motor_speed", "Invoke motor/speed {m1: 500, m2: -500}",
-         D(seq=7, invoke=I(id=1, motor_speed=c["MotorSpeed"](m1=500, m2=-500)))),
-        ("downlink_motor_speed_zero", "Invoke motor/speed {m1: 0, m2: 0}: an empty MotorSpeed that is set",
-         D(seq=8, invoke=I(id=2, motor_speed=c["MotorSpeed"](m1=0, m2=0)))),
+        ("uplink_drive", "a Drive record: the speed loop of both wheels", drive),
+        ("downlink_motor_drive", "Invoke motor/drive {speed: 200, turn: -50}",
+         D(seq=7, invoke=I(id=1, motor_drive=c["MotorDrive"](speed=200, turn=-50)))),
+        ("downlink_motor_drive_zero", "Invoke motor/drive {speed: 0, turn: 0}: an empty MotorDrive that is set",
+         D(seq=8, invoke=I(id=2, motor_drive=c["MotorDrive"](speed=0, turn=0)))),
         ("downlink_bench_load", "Invoke bench/load {rate: 20000, batch: 100}",
          D(seq=9, invoke=I(id=3, bench_load=c["BenchLoad"](rate=20_000, batch=100)))),
         ("downlink_invoke_no_args", "an Invoke without args: the STM32 answers \"unknown action\"",

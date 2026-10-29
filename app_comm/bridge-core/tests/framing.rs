@@ -11,7 +11,7 @@ use bridge_core::{
 };
 use serde_json::Value as Json;
 
-const UPLINKS: [&str; 7] = [
+const UPLINKS: [&str; 8] = [
     "uplink_empty",
     "uplink_imu_full",
     "uplink_imu_worst",
@@ -19,10 +19,11 @@ const UPLINKS: [&str; 7] = [
     "uplink_status",
     "uplink_log",
     "uplink_synthetic",
+    "uplink_drive",
 ];
 
 const DOWNLINKS: [&str; 4] =
-    ["downlink_motor_speed", "downlink_motor_speed_zero", "downlink_bench_load", "downlink_invoke_no_args"];
+    ["downlink_motor_drive", "downlink_motor_drive_zero", "downlink_bench_load", "downlink_invoke_no_args"];
 
 /// The payload (`.bin`) and the frame on the UART (`.frame`) of a vector.
 fn vector(name: &str) -> (Vec<u8>, Vec<u8>) {

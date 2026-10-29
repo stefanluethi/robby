@@ -1,0 +1,24 @@
+{
+  "description": "a Drive record: the speed loop of both wheels",
+  "type": "robby.link.Uplink",
+  "payload_bytes": 37,
+  "frame_bytes": 41,
+  "value": {
+    "seq": 4,
+    "records": [
+      {
+        "drive": {
+          "t_ns": 3602000000000,
+          "left_target_mm_s": 150,
+          "right_target_mm_s": 250,
+          "left_speed_mm_s": 142,
+          "right_speed_mm_s": 257,
+          "left_duty": 478,
+          "right_duty": 731,
+          "left_counts": 123456,
+          "right_counts": -7
+        }
+      }
+    ]
+  }
+}

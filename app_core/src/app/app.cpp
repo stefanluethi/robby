@@ -8,6 +8,7 @@
 #include "service/bench_load.h"
 #include "service/command_handler.h"
 #include "service/data_publisher.h"
+#include "service/drive.h"
 #include "service/distance_visualizer.h"
 #include "service/imu.h"
 #include "trace/clock.h"
@@ -45,9 +46,10 @@ void App::launch()
     auto* battery = new rtos::MessageQueue<fuelgauge_status_t>(1);
     auto* distance_map = new DistanceMap();
     auto* bench_load = new BenchLoad();
+    auto* drive = new Drive(*link);
 
     // Services ----------------------------------------------------------------
-    auto* command_handler = new CommandHandler(log_registry->createLogger(LogContextId::COMMAND), *link, *bench_load);
+    auto* command_handler = new CommandHandler(log_registry->createLogger(LogContextId::COMMAND), *link, *drive, *bench_load);
     g_uartDataReceived.register_callback([&](auto* data, auto length){
         command_handler->data_received_callback(data, length);
     });
@@ -84,6 +86,18 @@ void App::launch()
         .spawn([&](){
             while (true) {
                 command_handler->process();
+            }
+        });
+
+    auto drive_thread = rtos::Task::build()
+        .name("drive")
+        .stackSize(4096)
+        .priority(6)
+        .spawn([&] {
+            drive->start();
+
+            while (true) {
+                drive->run();
             }
         });
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "driver/fuelgauge.h"
+#include "service/drive_control.h"
 #include "service/samples.h"
 
 #include <array>
@@ -66,6 +67,8 @@ private:
     uint32_t _tx_frames {0U};
     uint32_t _tx_write_us {0U};
 };
+
+void make_drive(const drive::Sample& sample, robby_link_Record& record);
 
 /// `level` and `component` are the numbers of se_oss::LogLevel and robby::LogContextId,
 /// which match robby_link_LogLevel and robby_link_Component. The message is cut to 255
