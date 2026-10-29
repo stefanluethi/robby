@@ -23,7 +23,7 @@ struct Acceleration
 
 using AccelerationFrame = Acceleration<100>;
 
-/// Distances of one VL53L8CX in mm, [y][x] (row-major) with the zone x + 8y, negative where invalid
+/// Distances of one VL53L8CX in mm, [x][y] with the zone x + 8y, negative where invalid
 using DistanceSensorImage = std::array<std::array<int16_t, 8>, 8>;
 
 }  // namespace robby

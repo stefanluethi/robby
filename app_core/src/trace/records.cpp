@@ -61,7 +61,7 @@ void records::make_distance(uint64_t t_ns, const std::array<DistanceSensorImage,
     auto& image = record.kind.distance;
     image.t_ns = t_ns;
 
-    // sensors[s][y][x] in this order: index (s * 8 + y) * 8 + x, invalid zones as -1
+    // sensors[s][x][y] in this order: index (s * 8 + x) * 8 + y, invalid zones as -1
     pb_size_t count {0U};
     for (const auto& sensor : sensors) {
         for (const auto& row : sensor) {

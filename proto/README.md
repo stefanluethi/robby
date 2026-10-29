@@ -101,7 +101,7 @@ with `record: true`), `unit` and `scale` apply per field, and the field with
 | Record | blip path | blip value | Annotation |
 |---|---|---|---|
 | `ImuBatch` | `imu/acc` | record `{x, y, z}`, floats in g, one `Value` per sample | `record`, `scale: 0.000061`; sample `i` at `t_first_ns + i × period_ns` (`ROLE_PERIOD`) |
-| `DistanceImage` | `tof/distance` | array of 24 arrays of 8: int mm or `null` | `shape: [24, 8]`, `null_below: 0`: `tof/distance[s × 8 + y][x]` = `mm[(s × 8 + y) × 8 + x]` (s 0 left, 1 middle, 2 right; zone `x + 8y`) |
+| `DistanceImage` | `tof/distance` | array of 24 arrays of 8: int mm or `null` | `shape: [24, 8]`, `null_below: 0`: `tof/distance[s × 8 + x][y]` = `mm[(s × 8 + x) × 8 + y]` (s 0 left, 1 middle, 2 right; zone `x + 8y`) |
 | `Battery` | `battery/soc` | int, % | `soc_pct` |
 | | `battery/voltage` | float, V | `voltage_mv`, `scale: 0.001` |
 | | `battery/cell1`, `battery/cell2` | float, V | `cell1_mv`, `cell2_mv`, `scale: 0.001` |
