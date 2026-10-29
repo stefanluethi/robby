@@ -4,7 +4,8 @@
 extern I2C_HandleTypeDef hi2c2;
 
 #define BQ28Z620_I2C_ADDR (0x55 << 1)
-#define CMD_CURRENT 0x0A
+/* Current() is 0x0C, 0x0A is BatteryStatus() (SLUUCO9B 14.1.6/14.1.7) */
+#define CMD_CURRENT 0x0C
 #define CMD_RELATIVE_STATE_OF_CHARGE 0x2C
 #define CMD_VOLTAGE 0x08
 #define MAC_BLOCK_ACCESS 0x44
